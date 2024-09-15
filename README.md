@@ -1,6 +1,13 @@
-# OHS LDC
+---
+title: LDC
+layout: home
+permalink: /
+nav_order: 0
+---
 
-- [OHS LDC](#ohs-ldc)
+# LDC
+
+- [LDC](#ldc)
   - [Overview](#overview)
     - [Week 1 (15 September 2024)](#week-1-15-september-2024)
     - [Week 2 (22 September 2024)](#week-2-22-september-2024)
@@ -10,11 +17,11 @@
 
 ### Week 1 (15 September 2024)
 
-- [Outline](outline.md)
+- [Outline](outline)
 
 ### Week 2 (22 September 2024)
 
-- [Design](design.md)
+- [Design](design)
 
 ## Resources
 

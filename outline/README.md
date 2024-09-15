@@ -1,3 +1,10 @@
+---
+title: Outline
+layout: home
+permalink: /outline/
+nav_order: 1
+---
+
 # Outline
 
 - [Outline](#outline)
@@ -11,6 +18,7 @@ Last year, we touched upon:
 
 - Types and elements of a language
 - Lexers, parsers, context-free grammars
+- Compilers and interpreters (including JIT)
 - Type systems
 - Memory management
 - Calling conventions

@@ -1,3 +1,10 @@
+---
+title: Design
+layout: home
+permalink: /design/
+nav_order: 2
+---
+
 # Design
 
 - [Design](#design)
