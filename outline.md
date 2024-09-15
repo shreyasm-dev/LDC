@@ -25,7 +25,9 @@ Last year, we touched upon:
 
 ## The Plan
 
-1. Begin by designing a language (and stdlib)
+We'll be primarily looking at general-purpose languages, although we may also touch upon DSLs. Unless time permits and there is interest, we probably won't be creating something very low-level.
+
+1. Begin by designing a language (and standard library)
 2. Lexer and parser
 3. Type system?
 4. Interpreter
@@ -33,8 +35,7 @@ Last year, we touched upon:
 6. JVM backend?
 7. JIT compiler?
 8. Native interop (à la JNI)?
-9. Macros?
-10. Bootstraping?
+9. Bootstraping?
 
 Some of these are either ambitious or effectively mutually exclusive, and we may not get to implementing them at all; however, we'll still try to look at how they're done in other languages.
 
@@ -42,7 +43,9 @@ A notable absence from this list is memory management. I don't have much experie
 
 Minor addenda that we may cover briefly if at all:
 
+- Macros and decorators
 - Name mangling
 - Package management
-- Development tooling (e.g. via tree-sitter)
+- Parser/lexer tooling (e.g. ANTLR)
+- Development tooling (e.g. tree-sitter)
 - Reflection
