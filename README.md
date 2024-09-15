@@ -26,3 +26,4 @@ nav_order: 0
 ## Resources
 
 - [Crafting Interpreters](https://craftinginterpreters.com/)
+- [Programming Language Design and Implementation Stack Exchange](https://langdev.stackexchange.com/)

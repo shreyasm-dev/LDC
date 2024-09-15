@@ -23,7 +23,7 @@ Last year, we touched upon:
 - Memory management
 - Calling conventions
 - Tooling (ANTLR et al.)
-- Lamda calculus/functional programming
+- Lambda calculus/functional programming
 
 ## What's Being Done Differently This Year?
 
@@ -43,11 +43,11 @@ We'll be primarily looking at general-purpose languages, although we may also to
 6. JVM backend?
 7. JIT compiler?
 8. Native interop (à la JNI)?
-9. Bootstraping?
+9. Bootstrapping?
 
 Some of these are either ambitious or effectively mutually exclusive, and we may not get to implementing them at all; however, we'll still try to look at how they're done in other languages.
 
-A notable absence from this list is memory management. I don't have much experience implementing GCs et al., and our ability to implement it is affected by the source language we choose. We'll cross that bridge if/when we get to it.
+A notable absence from this list is memory management. I don't have much experience with implementing memory management in programming languages, and our ability to implement it is affected by the source language we choose. We'll cross that bridge if/when we get to it.
 
 Minor addenda that we may cover briefly if at all:
 
@@ -55,5 +55,5 @@ Minor addenda that we may cover briefly if at all:
 - Name mangling
 - Package management
 - Parser/lexer tooling (e.g. ANTLR)
-- Development tooling (e.g. tree-sitter)
+- Development tooling (e.g. with tree-sitter)
 - Reflection
