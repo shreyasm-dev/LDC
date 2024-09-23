@@ -8,8 +8,12 @@ mod util;
 
 fn main() {
   let source = r#"
-  fn main(args: [string]) {}
-  "#;
+fn main(args: [string]) {
+  "xyz\nabc
+\{48}\{45}\{4c}\{4c}\{4f}"
+}
+"#
+  .trim();
 
   let mut lexer = Lexer::new(source);
   match lexer.lex(true) {
@@ -18,8 +22,8 @@ fn main() {
         println!("{:?}", token);
       }
     }
-    Err(e) => {
-      e.print(source, "[]");
+    Err(error) => {
+      error.print(source, "[]");
       process::exit(1);
     }
   }

@@ -8,6 +8,7 @@ pub enum TokenKind {
   Eof,
 
   Identifier(String),
+  StringLiteral(String),
 
   Fn,
   Struct,
