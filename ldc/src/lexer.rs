@@ -1,9 +1,8 @@
 use crate::{
-  error::LexerError,
+  error::{Error, LexerError},
   token::{Token, TokenKind},
-  util::Span,
 };
-use std::{iter::Peekable, str::Chars};
+use std::{iter::Peekable, ops::Range, str::Chars};
 
 pub struct Lexer<'a> {
   pub input: Peekable<Chars<'a>>,
@@ -29,11 +28,11 @@ impl<'a> Lexer<'a> {
     self.start = self.end;
   }
 
-  pub fn span(&self) -> Span {
-    (self.start, self.end)
+  pub fn span(&self) -> Range<usize> {
+    self.start..self.end
   }
 
-  pub fn next(&mut self) -> Result<Token, LexerError> {
+  pub fn next(&mut self) -> Result<Token, Error<LexerError>> {
     let result = match self.advance() {
       Some(c) => match c {
         ' ' | '\n' | '\r' | '\t' => {
@@ -94,7 +93,7 @@ impl<'a> Lexer<'a> {
         ';' => Ok(TokenKind::Semicolon),
         '.' => Ok(TokenKind::Dot),
 
-        _ => Err(LexerError::UnexpectedCharacter(self.span(), c)),
+        _ => Err(Error(self.span(), LexerError::UnexpectedCharacter(c))),
       },
       None => Ok(TokenKind::Eof),
     }?;
@@ -105,7 +104,7 @@ impl<'a> Lexer<'a> {
     Ok((span, result))
   }
 
-  pub fn lex(&mut self, emit_whitespace: bool) -> Result<Vec<Token>, LexerError> {
+  pub fn lex(&mut self, emit_whitespace: bool) -> Result<Vec<Token>, Error<LexerError>> {
     let mut tokens = Vec::new();
 
     loop {

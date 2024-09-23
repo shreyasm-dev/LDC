@@ -1,4 +1,6 @@
-pub type Token = ((usize, usize), TokenKind);
+use std::ops::Range;
+
+pub type Token = (Range<usize>, TokenKind);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenKind {

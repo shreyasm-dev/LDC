@@ -1,4 +1,5 @@
 use lexer::Lexer;
+use std::process;
 
 mod error;
 mod lexer;
@@ -18,7 +19,8 @@ fn main() {
       }
     }
     Err(e) => {
-      eprintln!("{}", e);
+      e.print(source, "[]");
+      process::exit(1);
     }
   }
 }
