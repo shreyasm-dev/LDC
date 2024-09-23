@@ -64,12 +64,13 @@ This section is work-in-progress;
 
 ### Types
 
-- `i8`, `u8`, ?, `i32`, `u32`, `i64`, `u64`, `i128`, `u128`, `f32`, `f64`
+- `i8`, `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `i128`, `u128`, `f16`, `f32`, `f64`, `f128`
 - `boolean` (or maybe as an enum)
 - `string` (or maybe in the stdlib)
 - `(T, U, V)` - note that the empty tuple, `()`, is the unit type
-- `(T, U, V) -> W` (or `|T, U, V|`)
+- `(T, U, V): W` (or `|T, U, V|`)
 - `T | U | V`
+- `[T]`
 
 ### Structures
 
@@ -101,7 +102,7 @@ Traits do not support default or private members.
 trait X {
   pub x: T;
 
-  pub fn x() {}
+  pub fn x();
 }
 
 struct Y: X {
@@ -110,6 +111,22 @@ struct Y: X {
   pub fn x() {
     // this is an implementation of the method from the trait X
   }
+}
+```
+
+```rust
+struct X<T> {
+  pub x: T;
+}
+
+struct Y<T: X> {
+  pub x: T;
+}
+```
+
+```rust
+fn +(x: T, y: T) -> T {
+  x.add(y)
 }
 ```
 
