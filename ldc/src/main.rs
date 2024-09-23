@@ -10,7 +10,7 @@ fn main() {
   let source = r#"
 fn main(args: [string]) {
   "xyz\nabc
-\{48}\{45}\{4c}\{4c}\{4f}"
+\{48}\{45}\{4c}\{4c}\{4f"
 }
 "#
   .trim();

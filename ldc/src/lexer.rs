@@ -2,7 +2,11 @@ use crate::{
   error::{Error, LexerError},
   token::{Token, TokenKind},
 };
-use std::{iter::Peekable, ops::Range, str::Chars};
+use std::{
+  iter::Peekable,
+  ops::{Range, RangeInclusive},
+  str::Chars,
+};
 
 macro_rules! escape {
   ($l:lifetime, $span:expr, $x:expr, $string:expr, $($c:expr => $r:expr),* $(,)?) => {
@@ -13,7 +17,7 @@ macro_rules! escape {
       _ => {
         break $l Err(Error(
           $span,
-          LexerError::UnexpectedCharacterExpected($x, &[$($c),*]),
+          LexerError::UnexpectedCharacter($x, &[], &[$($c),*]),
         ));
       },
     }
@@ -48,8 +52,16 @@ impl<'a> Lexer<'a> {
     self.start..self.end
   }
 
-  pub fn unexpected_character(&self, c: char) -> Error<LexerError> {
-    Error(self.last_char(), LexerError::UnexpectedCharacter(c))
+  pub fn unexpected_character(
+    &self,
+    c: char,
+    ranges: &'static [RangeInclusive<char>],
+    characters: &'static [char],
+  ) -> Error<LexerError> {
+    Error(
+      self.last_char(),
+      LexerError::UnexpectedCharacter(c, ranges, characters),
+    )
   }
 
   pub fn eof(&self) -> Error<LexerError> {
@@ -137,7 +149,11 @@ impl<'a> Lexer<'a> {
                               '0'..='9' | 'a'..='f' | 'A'..='F' => code.push(c),
                               '}' => break,
                               _ => {
-                                break 'string Err(self.unexpected_character(c))
+                                break 'string Err(self.unexpected_character(
+                                  c,
+                                  &['0'..='9', 'a'..='f', 'A'..='F'],
+                                  &['}'],
+                                ))
                               }
                             },
                             None => {
@@ -193,7 +209,7 @@ impl<'a> Lexer<'a> {
         ';' => Ok(TokenKind::Semicolon),
         '.' => Ok(TokenKind::Dot),
 
-        _ => Err(self.unexpected_character(c)),
+        _ => Err(self.unexpected_character(c, &[], &[])),
       },
       None => Ok(TokenKind::Eof),
     }?;
@@ -282,13 +298,16 @@ mod tests {
       Lexer::new(r#""hello, world!\x""#).lex(false).unwrap_err(),
       Error(
         15..16,
-        LexerError::UnexpectedCharacterExpected('x', &['n', 'r', 't', '0', '\\', '"', '{'])
+        LexerError::UnexpectedCharacter('x', &[], &['n', 'r', 't', '0', '\\', '"', '{'])
       )
     );
 
     assert_eq!(
       Lexer::new(r#""hello, world!\{""#).lex(false).unwrap_err(),
-      Error(16..17, LexerError::UnexpectedCharacter('"'))
+      Error(
+        16..17,
+        LexerError::UnexpectedCharacter('"', &['0'..='9', 'a'..='f', 'A'..='F'], &['}'])
+      )
     );
 
     assert_eq!(

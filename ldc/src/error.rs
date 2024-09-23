@@ -1,6 +1,6 @@
 use crate::util::Reportable;
 use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error<T: Reportable>(pub Range<usize>, pub T);
@@ -17,8 +17,7 @@ impl<T: Reportable> Error<T> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LexerError {
-  UnexpectedCharacter(char),
-  UnexpectedCharacterExpected(char, &'static [char]),
+  UnexpectedCharacter(char, &'static [RangeInclusive<char>], &'static [char]),
   UnexpectedEof,
   InvalidCodepoint(String),
 }
@@ -37,20 +36,33 @@ impl Reportable for LexerError {
       .with_label(
         Label::new((&*name, span))
           .with_message(match self {
-            LexerError::UnexpectedCharacter(c) => {
-              format!("Unexpected character {}", c.fg(b))
+            LexerError::UnexpectedCharacter(c, ranges, expected) => {
+              let items = vec![
+                expected
+                  .iter()
+                  .map(|c| c.fg(b).to_string())
+                  .collect::<Vec<_>>(),
+                ranges
+                  .iter()
+                  .map(|r| format!("{}-{}", r.start().fg(b), r.end().fg(b)))
+                  .collect::<Vec<_>>(),
+              ]
+              .concat();
+
+              format!(
+                "Unexpected character {}{}",
+                c.fg(b),
+                if items.is_empty() {
+                  "".to_string()
+                } else {
+                  format!(", expected {}", items.join(", "))
+                }
+              )
             }
-            LexerError::UnexpectedCharacterExpected(c, expected) => format!(
-              "Unexpected character {}, expected one of {}",
-              c.fg(b),
-              expected
-                .iter()
-                .map(|c| format!("{}", c.fg(b)))
-                .collect::<Vec<_>>()
-                .join(", ")
-            ),
-            LexerError::UnexpectedEof => "Unexpected end of file".to_string(),
-            LexerError::InvalidCodepoint(codepoint) => format!("Invalid code point 0x{}", codepoint),
+            LexerError::UnexpectedEof => "Unexpected end of input".to_string(),
+            LexerError::InvalidCodepoint(codepoint) => {
+              format!("Invalid code point 0x{}", codepoint)
+            }
           })
           .with_color(b),
       )
