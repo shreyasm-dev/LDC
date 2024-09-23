@@ -1,9 +1,8 @@
-use lexer::Lexer;
+use lexer::lexer::Lexer;
 use std::process;
 
 mod error;
 mod lexer;
-mod token;
 mod util;
 
 fn main() {

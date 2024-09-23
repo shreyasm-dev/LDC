@@ -1,7 +1,5 @@
-use crate::{
-  error::{Error, LexerError},
-  token::{Token, TokenKind},
-};
+use super::token::{Token, TokenKind};
+use crate::error::{Error, LexerError};
 use std::{
   iter::Peekable,
   ops::{Range, RangeInclusive},
