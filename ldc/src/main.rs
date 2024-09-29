@@ -8,6 +8,7 @@ mod util;
 fn main() {
   let source = r#"
 fn main(args: [string]) {
+  x + y
   // comment
   /* comment
   \**\/*/

@@ -191,55 +191,62 @@ impl<'a> Lexer<'a> {
         '}' => Ok(TokenKind::RightBrace),
         '[' => Ok(TokenKind::LeftBracket),
         ']' => Ok(TokenKind::RightBracket),
-        '<' => Ok(TokenKind::LeftAngle),
-        '>' => Ok(TokenKind::RightAngle),
 
         ',' => Ok(TokenKind::Comma),
-        ':' => Ok(TokenKind::Colon),
         ';' => Ok(TokenKind::Semicolon),
-        '.' => Ok(TokenKind::Dot),
 
-        // TODO: escaping
-        '/' => match self.advance() {
-          Some('/') => {
-            let mut comment = String::new();
+        // TODO: more operators
+        '<' | '>' | ':' | '.' | '=' | '+' | '-' | '*' | '/' | '%' | '!' | '&' | '|'
+        | '^' => 'operator: {
+          if c == '/' {
+            // TODO: escaping
+            match self.advance() {
+              Some('/') => {
+                let mut comment = String::new();
 
-            while let Some(&c) = self.input.peek() {
-              match c {
-                '\n' => break,
-                c => {
-                  comment.push(c);
-                  self.advance();
-                }
-              }
-            }
-
-            Ok(TokenKind::Comment(comment))
-          }
-          Some('*') => 'asterisk: {
-            let mut comment = String::new();
-
-            loop {
-              match self.advance() {
-                Some('*') => match self.advance() {
-                  Some('/') => break,
-                  Some(c) => {
-                    comment.push('*');
-                    comment.push(c);
+                while let Some(&c) = self.input.peek() {
+                  match c {
+                    '\n' => break,
+                    c => {
+                      comment.push(c);
+                      self.advance();
+                    }
                   }
-                  None => break 'asterisk Err(self.eof()),
-                },
-                Some(c) => {
-                  comment.push(c);
                 }
-                None => break 'asterisk Err(self.eof()),
-              }
-            }
 
-            Ok(TokenKind::Comment(comment))
+                break 'operator Ok(TokenKind::Comment(comment));
+              }
+              Some('*') => {
+                let mut comment = String::new();
+
+                loop {
+                  match self.advance() {
+                    Some('*') => match self.advance() {
+                      Some('/') => break,
+                      Some(c) => {
+                        comment.push('*');
+                        comment.push(c);
+                      }
+                      None => break 'operator Err(self.eof()),
+                    },
+                    Some(c) => comment.push(c),
+                    None => break 'operator Err(self.eof()),
+                  }
+                }
+
+                break 'operator Ok(TokenKind::Comment(comment));
+              }
+              _ => (),
+            };
           }
-          _ => Err(self.unexpected_character('/', &[], &[])),
-        },
+
+          Ok(TokenKind::Operator(self.match_until(c, |c| match c {
+            '<' | '>' | ':' | '.' | '=' | '+' | '-' | '*' | '/' | '%' | '!' | '&' | '|' | '^' => {
+              Some(c.to_string())
+            }
+            _ => None,
+          })))
+        }
 
         _ => Err(self.unexpected_character(c, &[], &[])),
       },
@@ -294,7 +301,7 @@ mod tests {
         ((3..7), TokenKind::Identifier("main".to_string())),
         ((7..8), TokenKind::LeftParen),
         ((8..12), TokenKind::Identifier("args".to_string())),
-        ((12..13), TokenKind::Colon),
+        ((12..13), TokenKind::Operator(":".to_string())),
         ((14..15), TokenKind::LeftBracket),
         ((15..21), TokenKind::Identifier("string".to_string())),
         ((21..22), TokenKind::RightBracket),
