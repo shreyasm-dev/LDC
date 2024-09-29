@@ -18,7 +18,7 @@ impl<T: Reportable> Error<T> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LexerError {
   UnexpectedCharacter(char, &'static [RangeInclusive<char>], &'static [char]),
-  UnexpectedEof,
+  UnexpectedEof(usize),
   InvalidCodepoint(String),
 }
 
@@ -32,40 +32,49 @@ impl Reportable for LexerError {
     colors.next();
     let b = colors.next();
 
-    Report::build(ReportKind::Error, &*name, span.start)
-      .with_label(
-        Label::new((&*name, span))
-          .with_message(match self {
-            LexerError::UnexpectedCharacter(c, ranges, expected) => {
-              let items = vec![
-                expected
-                  .iter()
-                  .map(|c| c.fg(b).to_string())
-                  .collect::<Vec<_>>(),
-                ranges
-                  .iter()
-                  .map(|r| format!("{}-{}", r.start().fg(b), r.end().fg(b)))
-                  .collect::<Vec<_>>(),
-              ]
-              .concat();
+    let builder = Report::build(ReportKind::Error, &*name, span.start).with_label(
+      Label::new((&*name, span.clone()))
+        .with_message(match self {
+          LexerError::UnexpectedCharacter(c, ranges, expected) => {
+            let items = vec![
+              expected
+                .iter()
+                .map(|c| c.fg(b).to_string())
+                .collect::<Vec<_>>(),
+              ranges
+                .iter()
+                .map(|r| format!("{}-{}", r.start().fg(b), r.end().fg(b)))
+                .collect::<Vec<_>>(),
+            ]
+            .concat();
 
-              format!(
-                "Unexpected character {}{}",
-                c.fg(b),
-                if items.is_empty() {
-                  "".to_string()
-                } else {
-                  format!(", expected {}", items.join(", "))
-                }
-              )
-            }
-            LexerError::UnexpectedEof => "Unexpected end of input".to_string(),
-            LexerError::InvalidCodepoint(codepoint) => {
-              format!("Invalid code point 0x{}", codepoint)
-            }
-          })
-          .with_color(b),
-      )
-      .finish()
+            format!(
+              "Unexpected character {}{}",
+              c.fg(b),
+              if items.is_empty() {
+                "".to_string()
+              } else {
+                format!(", expected {}", items.join(", "))
+              }
+            )
+          }
+          LexerError::UnexpectedEof(_) => "Unexpected end of input".to_string(),
+          LexerError::InvalidCodepoint(codepoint) => {
+            format!("Invalid code point 0x{}", codepoint)
+          }
+        })
+        .with_color(b),
+    );
+
+    match self {
+      LexerError::UnexpectedEof(start) => builder
+        .with_label(
+          Label::new((&*name, *start..*start))
+            .with_message("Token began here")
+            .with_color(b),
+        )
+        .finish(),
+      _ => builder.finish(),
+    }
   }
 }

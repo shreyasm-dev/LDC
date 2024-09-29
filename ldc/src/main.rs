@@ -8,8 +8,11 @@ mod util;
 fn main() {
   let source = r#"
 fn main(args: [string]) {
+  // comment
+  /* comment
+  \**\/*/
   "xyz\nabc
-\{48}\{45}\{4c}\{4c}\{4f"
+\{48}\{45}\{4c}\{4c}\{4f}"
 }
 "#
   .trim();

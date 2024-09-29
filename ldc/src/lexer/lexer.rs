@@ -22,6 +22,7 @@ macro_rules! escape {
   };
 }
 
+#[derive(Debug, Clone)]
 pub struct Lexer<'a> {
   pub input: Peekable<Chars<'a>>,
   pub start: usize,
@@ -63,59 +64,51 @@ impl<'a> Lexer<'a> {
   }
 
   pub fn eof(&self) -> Error<LexerError> {
-    Error((self.end - 1)..(self.end - 1), LexerError::UnexpectedEof)
+    Error(
+      (self.end - 1)..(self.end - 1),
+      LexerError::UnexpectedEof(self.start),
+    )
   }
 
   pub fn last_char(&self) -> Range<usize> {
     (self.end - 1)..self.end
   }
 
+  pub fn match_until<F>(&mut self, c: char, mut f: F) -> String
+  where
+    F: FnMut(char) -> Option<String>,
+  {
+    let mut result = String::new();
+    result.push(c);
+
+    while let Some(&c) = self.input.peek() {
+      match f(c) {
+        Some(s) => {
+          result.push_str(&s);
+          self.advance();
+        }
+        None => break,
+      }
+    }
+
+    result
+  }
+
   pub fn next(&mut self) -> Result<Token, Error<LexerError>> {
     let result = match self.advance() {
       Some(c) => match c {
-        ' ' | '\n' | '\r' | '\t' => {
-          let mut whitespace = String::new();
-          whitespace.push(c);
+        ' ' | '\n' | '\r' | '\t' => Ok(TokenKind::Whitespace(self.match_until(c, |c| match c {
+          ' ' | '\n' | '\r' | '\t' => Some(c.to_string()),
+          _ => None,
+        }))),
 
-          while let Some(&c) = self.input.peek() {
-            match c {
-              ' ' | '\n' | '\r' | '\t' => {
-                whitespace.push(c);
-                self.advance();
-              }
-              _ => break,
-            }
-          }
-
-          Ok(TokenKind::Whitespace(whitespace))
-        }
-
-        'a'..='z' | 'A'..='Z' | '_' => {
-          let mut ident = String::new();
-          ident.push(c);
-
-          while let Some(&c) = self.input.peek() {
-            match c {
-              'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => {
-                ident.push(c);
-                self.advance();
-              }
-              _ => break,
-            }
-          }
-
-          Ok(match ident.as_str() {
-            "fn" => TokenKind::Fn,
-            "struct" => TokenKind::Struct,
-            "enum" => TokenKind::Enum,
-            "trait" => TokenKind::Trait,
-            "let" => TokenKind::Let,
-
-            "bool" => TokenKind::Bool,
-
-            _ => TokenKind::Identifier(ident),
-          })
-        }
+        'a'..='z' | 'A'..='Z' | '_' => Ok(TokenKind::from_identifier(self.match_until(
+          c,
+          |c| match c {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => Some(c.to_string()),
+            _ => None,
+          },
+        ))),
 
         '"' => 'string: {
           let mut string = String::new();
@@ -137,7 +130,6 @@ impl<'a> Lexer<'a> {
                       '0' => '\0',
                       '\\' => '\\',
                       '"' => '"',
-                      // TODO: unicode escape
                       '{' => {
                         let mut code = String::new();
 
@@ -207,6 +199,48 @@ impl<'a> Lexer<'a> {
         ';' => Ok(TokenKind::Semicolon),
         '.' => Ok(TokenKind::Dot),
 
+        // TODO: escaping
+        '/' => match self.advance() {
+          Some('/') => {
+            let mut comment = String::new();
+
+            while let Some(&c) = self.input.peek() {
+              match c {
+                '\n' => break,
+                c => {
+                  comment.push(c);
+                  self.advance();
+                }
+              }
+            }
+
+            Ok(TokenKind::Comment(comment))
+          }
+          Some('*') => 'asterisk: {
+            let mut comment = String::new();
+
+            loop {
+              match self.advance() {
+                Some('*') => match self.advance() {
+                  Some('/') => break,
+                  Some(c) => {
+                    comment.push('*');
+                    comment.push(c);
+                  }
+                  None => break 'asterisk Err(self.eof()),
+                },
+                Some(c) => {
+                  comment.push(c);
+                }
+                None => break 'asterisk Err(self.eof()),
+              }
+            }
+
+            Ok(TokenKind::Comment(comment))
+          }
+          _ => Err(self.unexpected_character('/', &[], &[])),
+        },
+
         _ => Err(self.unexpected_character(c, &[], &[])),
       },
       None => Ok(TokenKind::Eof),
@@ -218,7 +252,7 @@ impl<'a> Lexer<'a> {
     Ok((span, result))
   }
 
-  pub fn lex(&mut self, emit_whitespace: bool) -> Result<Vec<Token>, Error<LexerError>> {
+  pub fn lex(&mut self, emit_ignored: bool) -> Result<Vec<Token>, Error<LexerError>> {
     let mut tokens = Vec::new();
 
     loop {
@@ -229,7 +263,7 @@ impl<'a> Lexer<'a> {
       }
 
       if let TokenKind::Whitespace(_) = kind {
-        if !emit_whitespace {
+        if !emit_ignored {
           continue;
         }
       }
@@ -247,15 +281,14 @@ mod tests {
 
   #[test]
   fn test_general() {
-    let source = r#"fn main(args: [string]) {
-  "hello, world!\n";
-}"#;
-
-    let mut lexer = Lexer::new(source);
-    let tokens = lexer.lex(false).unwrap();
-
     assert_eq!(
-      tokens,
+      Lexer::new(
+        r#"fn main(args: [string]) {
+  "hello, world!\n";
+}"#
+      )
+      .lex(false)
+      .unwrap(),
       vec![
         ((0..2), TokenKind::Fn),
         ((3..7), TokenKind::Identifier("main".to_string())),
@@ -289,7 +322,7 @@ mod tests {
 
     assert_eq!(
       Lexer::new(r#""hello, world!\n"#).lex(false).unwrap_err(),
-      Error(16..16, LexerError::UnexpectedEof)
+      Error(16..16, LexerError::UnexpectedEof(0))
     );
 
     assert_eq!(
@@ -310,7 +343,42 @@ mod tests {
 
     assert_eq!(
       Lexer::new(r#""hello, world!\{"#).lex(false).unwrap_err(),
-      Error(16..16, LexerError::UnexpectedEof)
+      Error(16..16, LexerError::UnexpectedEof(0))
+    );
+  }
+
+  #[test]
+  fn test_comment() {
+    assert_eq!(
+      Lexer::new(r#"// hello, world!"#).lex(true).unwrap(),
+      vec![(0..16, TokenKind::Comment(" hello, world!".to_string()))]
+    );
+
+    assert_eq!(
+      Lexer::new(r#"/* hello, world! */"#).lex(true).unwrap(),
+      vec![(0..19, TokenKind::Comment(" hello, world! ".to_string()))]
+    );
+
+    assert_eq!(
+      Lexer::new(r#"/* hello, world!"#).lex(true).unwrap_err(),
+      Error(16..16, LexerError::UnexpectedEof(0))
+    );
+
+    assert_eq!(
+      Lexer::new(
+        r#"/* hello, world!
+\\**\/*/"#
+      )
+      .lex(true)
+      .unwrap(),
+      vec![(
+        0..25,
+        TokenKind::Comment(
+          r#" hello, world!
+\\**\/"#
+            .to_string()
+        )
+      )]
     );
   }
 }
