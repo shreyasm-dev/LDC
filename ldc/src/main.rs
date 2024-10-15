@@ -1,28 +1,36 @@
 use lexer::lexer::Lexer;
+use parser::parser::Parser;
 use std::process;
 
 mod error;
 mod lexer;
-mod util;
+mod parser;
 
 fn main() {
   let source = r#"
-fn main(args: [string]) {
-  x + y
-  // comment
-  /* comment
-  \**\/*/
-  "xyz\nabc
-\{48}\{45}\{4c}\{4c}\{4f}"
-}
-"#
-  .trim();
+  pub enum X {
+    Y,
+    Z(char, [(i32, xyz): (abc, char)]),
+    A(b, c | d | e | f)
+  }
+"#.trim();
 
   let mut lexer = Lexer::new(source);
-  match lexer.lex(true) {
+  match lexer.lex(false) {
     Ok(tokens) => {
-      for token in tokens {
+      for token in tokens.clone() {
         println!("{:?}", token);
+      }
+
+      let mut parser = Parser::new(tokens.iter().peekable());
+      let ast = parser.parse();
+
+      match ast {
+        Ok(ast) => println!("{:#?}", ast),
+        Err(error) => {
+          error.print(source, "[]");
+          process::exit(1);
+        }
       }
     }
     Err(error) => {

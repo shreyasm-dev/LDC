@@ -1,6 +1,11 @@
-use crate::util::Reportable;
 use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
 use std::ops::{Range, RangeInclusive};
+
+use crate::lexer::token::TokenKind;
+
+pub trait Reportable {
+  fn report(&self, span: Range<usize>, name: &'static str) -> Report<'_, (&str, Range<usize>)>;
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Error<T: Reportable>(pub Range<usize>, pub T);
@@ -20,6 +25,11 @@ pub enum LexerError {
   UnexpectedCharacter(char, &'static [RangeInclusive<char>], &'static [char]),
   UnexpectedEof(usize),
   InvalidCodepoint(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParserError {
+  UnexpectedToken(Option<TokenKind>),
 }
 
 impl Reportable for LexerError {
@@ -76,5 +86,33 @@ impl Reportable for LexerError {
         .finish(),
       _ => builder.finish(),
     }
+  }
+}
+
+impl Reportable for ParserError {
+  fn report(
+    &self,
+    span: Range<usize>,
+    name: &'static str,
+  ) -> ariadne::Report<'_, (&str, std::ops::Range<usize>)> {
+    let mut colors = ColorGenerator::new();
+    colors.next();
+    let b = colors.next();
+
+    Report::build(ReportKind::Error, &*name, span.start)
+      .with_label(
+        Label::new((&*name, span.clone()))
+          .with_message(match self {
+            ParserError::UnexpectedToken(None)
+            | ParserError::UnexpectedToken(Some(TokenKind::Eof)) => {
+              "Unexpected end of input".to_string()
+            }
+            ParserError::UnexpectedToken(Some(token)) => {
+              format!("Unexpected token `{:?}`", token)
+            }
+          })
+          .with_color(b),
+      )
+      .finish()
   }
 }

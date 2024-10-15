@@ -2,7 +2,7 @@ use std::ops::Range;
 
 pub type Token = (Range<usize>, TokenKind);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TokenKind {
   Whitespace(String),
   Comment(String),
@@ -18,7 +18,11 @@ pub enum TokenKind {
   Let,
   Pub,
   Self_,
+  While,
+  If,
+  Return,
 
+  Char,
   I8,
   I16,
   I32,
@@ -57,7 +61,11 @@ impl TokenKind {
       "let" => TokenKind::Let,
       "pub" => TokenKind::Pub,
       "self" => TokenKind::Self_,
+      "while" => TokenKind::While,
+      "if" => TokenKind::If,
+      "return" => TokenKind::Return,
 
+      "char" => TokenKind::Char,
       "i8" => TokenKind::I8,
       "i16" => TokenKind::I16,
       "i32" => TokenKind::I32,

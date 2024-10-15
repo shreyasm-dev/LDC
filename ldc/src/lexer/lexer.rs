@@ -266,6 +266,7 @@ impl<'a> Lexer<'a> {
       let (span, kind) = self.next()?;
 
       if kind == TokenKind::Eof {
+        tokens.push((span.start..span.start, kind));
         break;
       }
 
