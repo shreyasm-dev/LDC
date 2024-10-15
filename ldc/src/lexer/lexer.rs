@@ -197,7 +197,7 @@ impl<'a> Lexer<'a> {
 
         // TODO: more operators
         '<' | '>' | ':' | '.' | '=' | '+' | '-' | '*' | '/' | '%' | '!' | '&' | '|'
-        | '^' => 'operator: {
+        | '^' | '?' => 'operator: {
           if c == '/' {
             // TODO: escaping
             match self.advance() {
@@ -238,14 +238,17 @@ impl<'a> Lexer<'a> {
               }
               _ => (),
             };
+          } else if c == '-' {
+            match self.input.peek() {
+              Some(&'>') => {
+                self.advance();
+                break 'operator Ok(TokenKind::Operator("->".to_string()));
+              }
+              _ => (),
+            }
           }
 
-          Ok(TokenKind::Operator(self.match_until(c, |c| match c {
-            '<' | '>' | ':' | '.' | '=' | '+' | '-' | '*' | '/' | '%' | '!' | '&' | '|' | '^' => {
-              Some(c.to_string())
-            }
-            _ => None,
-          })))
+          Ok(TokenKind::Operator(c.to_string()))
         }
 
         _ => Err(self.unexpected_character(c, &[], &[])),

@@ -67,7 +67,7 @@ This section is work-in-progress;
 - `i8`, `u8`, `i16`, `u16`, `i32`, `u32`, `i64`, `u64`, `i128`, `u128`, `f16`, `f32`, `f64`, `f128`
 - `boolean` (or maybe as an enum)
 - `string` (or maybe in the stdlib)
-- `(T, U, V)` - note that the empty tuple, `()`, is the unit type
+- `(T, U, V)` - note that the empty tuple, `()`, is the unit type, and that `(T)` is equivalent to `T`
 - `(T, U, V): W` (or `|T, U, V|`)
 - `T | U | V`
 - `[T]`

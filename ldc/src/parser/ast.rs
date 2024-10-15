@@ -24,16 +24,15 @@ pub struct Function {
 // TODO: precedence and associativity
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Operator {
-  Unary {
+  Prefix {
     operator: String,
-    operand: Type,
+    operand: Parameter,
     result: Type,
     body: Expression,
   },
-  Binary {
+  Infix {
     operator: String,
-    left: Type,
-    right: Type,
+    operands: (Parameter, Parameter),
     result: Type,
     body: Expression,
   },
@@ -101,22 +100,31 @@ pub enum Type {
   Union(Box<Type>, Box<Type>),
 }
 
+// grouping is not required since (T) == T
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expression {
-  Block(Vec<Expression>),
+  // (expression, has value)
+  Block(Vec<Expression>, bool),
   If(Box<Expression>, Box<Expression>, Option<Box<Expression>>),
   While(Box<Expression>, Box<Expression>),
   Return(Box<Expression>),
   Declaration(String),
-  Assignment(String, Box<Expression>),
+  Assignment(Box<Expression>, Box<Expression>),
+  DeclarationAssignment(String, Box<Expression>),
   Call(Box<Expression>, Vec<Expression>),
-  Field(Box<Expression>, String), // TODO: '.' is not handled specially
+  Field(Box<Expression>, FieldAccess),
   Index(Box<Expression>, Box<Expression>),
   Literal(Literal),
-  Binary(Box<Expression>, String, Box<Expression>),
+  Infix(Box<Expression>, String, Box<Expression>),
   Prefix(String, Box<Expression>),
   Postfix(Box<Expression>, String),
   Identifier(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FieldAccess {
+  Identifier(String),
+  Integer(usize),
 }
 
 // TODO: int, float
@@ -124,6 +132,6 @@ pub enum Expression {
 pub enum Literal {
   Char(char),
   String(String),
-  Tuple(Vec<Literal>),
-  Array(Vec<Literal>),
+  Tuple(Vec<Expression>),
+  Array(Vec<Expression>),
 }

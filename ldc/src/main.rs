@@ -13,7 +13,17 @@ fn main() {
     Z(char, [(i32, xyz): (abc, char)]),
     A(b, c | d | e | f)
   }
-"#.trim();
+
+  fn main() -> () {
+    (x)().y(if a b else if c d else e).z;
+    while x y;
+    x = y;
+    [if a b] = c
+  }
+
+  op + (a: b, c: d) -> e f
+"#
+  .trim();
 
   let mut lexer = Lexer::new(source);
   match lexer.lex(false) {

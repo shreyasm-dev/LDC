@@ -12,6 +12,7 @@ pub enum TokenKind {
   StringLiteral(String),
 
   Fn,
+  Op,
   Struct,
   Enum,
   Trait,
@@ -20,6 +21,7 @@ pub enum TokenKind {
   Self_,
   While,
   If,
+  Else,
   Return,
 
   Char,
@@ -55,6 +57,7 @@ impl TokenKind {
   pub fn from_identifier(ident: String) -> Self {
     match ident.as_str() {
       "fn" => TokenKind::Fn,
+      "op" => TokenKind::Op,
       "struct" => TokenKind::Struct,
       "enum" => TokenKind::Enum,
       "trait" => TokenKind::Trait,
@@ -63,6 +66,7 @@ impl TokenKind {
       "self" => TokenKind::Self_,
       "while" => TokenKind::While,
       "if" => TokenKind::If,
+      "else" => TokenKind::Else,
       "return" => TokenKind::Return,
 
       "char" => TokenKind::Char,

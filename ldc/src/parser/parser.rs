@@ -1,4 +1,7 @@
-use super::ast::{Enum, Item, Module, Type, Variant};
+use super::ast::{
+  Enum, Expression, FieldAccess, Function, Item, Literal, Module, Operator, Parameter, Type,
+  Variant,
+};
 use crate::{
   error::{Error, ParserError},
   lexer::token::{Token, TokenKind},
@@ -88,9 +91,211 @@ impl Parser<'_> {
 
   fn parse_item(&mut self) -> Result<Item, Error<ParserError>> {
     Ok(match self.tokens.peek().copied() {
+      Some((_, TokenKind::Fn)) => Item::Function(self.parse_function()?),
       Some((_, TokenKind::Enum)) => Item::Enum(self.parse_enum()?),
+      Some((_, TokenKind::Op)) => Item::Operator(self.parse_operator()?),
       token => Err(self.unexpected_token(token))?,
     })
+  }
+
+  fn parse_function(&mut self) -> Result<Function, Error<ParserError>> {
+    match self.tokens.next() {
+      Some((_, TokenKind::Fn)) => {}
+      token => Err(self.unexpected_token(token))?,
+    }
+
+    let name = match self.tokens.next() {
+      Some((_, TokenKind::Identifier(name))) => name,
+      token => Err(self.unexpected_token(token))?,
+    }
+    .to_string();
+
+    match self.tokens.next() {
+      Some((_, TokenKind::LeftParen)) => {}
+      token => Err(self.unexpected_token(token))?,
+    }
+
+    let parameters = list!(
+      self,
+      TokenKind::RightParen,
+      TokenKind::Comma,
+      Parser::parse_parameter
+    );
+
+    let return_type = match self.tokens.peek() {
+      Some((_, TokenKind::Operator(operator))) if operator == "->" => {
+        self.tokens.next();
+        Some(self.parse_type()?)
+      }
+      _ => None,
+    }
+    .unwrap_or(Type::Tuple(Vec::new()));
+
+    let body = self.parse_expression()?;
+
+    Ok(Function {
+      name,
+      parameters,
+      return_type,
+      body,
+    })
+  }
+
+  fn parse_parameter(&mut self) -> Result<Parameter, Error<ParserError>> {
+    let name = match self.tokens.next() {
+      Some((_, TokenKind::Identifier(name))) => name,
+      token => Err(self.unexpected_token(token))?,
+    }
+    .to_string();
+
+    match self.tokens.next() {
+      Some((_, TokenKind::Operator(operator))) if operator == ":" => {}
+      token => Err(self.unexpected_token(token))?,
+    }
+
+    let ty = self.parse_type()?;
+
+    Ok(Parameter { name, ty })
+  }
+
+  fn parse_expression(&mut self) -> Result<Expression, Error<ParserError>> {
+    let mut expression = match self.tokens.next() {
+      Some((_, TokenKind::Identifier(name))) => Ok(Expression::Identifier(name.clone())),
+      Some((_, TokenKind::If)) => {
+        let condition = Box::new(self.parse_expression()?);
+        let then = Box::new(self.parse_expression()?);
+        let otherwise = match self.tokens.peek() {
+          Some((_, TokenKind::Else)) => {
+            self.tokens.next();
+            Some(Box::new(self.parse_expression()?))
+          }
+          _ => None,
+        };
+
+        Ok(Expression::If(condition, then, otherwise))
+      }
+      Some((_, TokenKind::While)) => {
+        let condition = Box::new(self.parse_expression()?);
+        let body = Box::new(self.parse_expression()?);
+
+        Ok(Expression::While(condition, body))
+      }
+      Some((_, TokenKind::Return)) => Ok(Expression::Return(Box::new(self.parse_expression()?))),
+      Some((_, TokenKind::Let)) => {
+        let name = match self.tokens.next() {
+          Some((_, TokenKind::Identifier(name))) => name,
+          token => Err(self.unexpected_token(token))?,
+        }
+        .to_string();
+
+        Ok(match self.tokens.next() {
+          Some((_, TokenKind::Operator(operator))) if operator == "=" => {
+            let value = Box::new(self.parse_expression()?);
+            Expression::DeclarationAssignment(name, value)
+          }
+          _ => Expression::Declaration(name),
+        })
+      }
+      Some((_, TokenKind::LeftBrace)) => {
+        let mut ended = false;
+        let mut value = false;
+        let mut expressions = Vec::new();
+
+        loop {
+          match self.tokens.peek().copied() {
+            Some((_, TokenKind::RightBrace)) => {
+              self.tokens.next();
+              break;
+            }
+            token => {
+              if ended {
+                Err(self.unexpected_token(token))?;
+              }
+
+              value = true;
+              expressions.push(self.parse_expression()?);
+
+              match self.tokens.peek().copied() {
+                Some((_, TokenKind::Semicolon)) => {
+                  self.tokens.next();
+                  value = false;
+                }
+                _ => {
+                  ended = true;
+                }
+              }
+            }
+          }
+        }
+
+        Ok(Expression::Block(expressions, value))
+      }
+      Some((_, TokenKind::StringLiteral(value))) => {
+        Ok(Expression::Literal(Literal::String(value.clone())))
+      }
+      Some((_, TokenKind::LeftParen)) => Ok(Expression::Literal(Literal::Tuple(list!(
+        self,
+        TokenKind::RightParen,
+        TokenKind::Comma,
+        Parser::parse_expression
+      )))),
+      Some((_, TokenKind::LeftBracket)) => Ok(Expression::Literal(Literal::Array(list!(
+        self,
+        TokenKind::RightBracket,
+        TokenKind::Comma,
+        Parser::parse_expression
+      )))),
+      token => Err(self.unexpected_token(token))?,
+    }?;
+
+    // TODO: better way to handle this?
+    loop {
+      match self.tokens.peek() {
+        Some((_, TokenKind::LeftParen)) => {
+          self.tokens.next();
+          expression = Expression::Call(
+            Box::new(expression),
+            list!(
+              self,
+              TokenKind::RightParen,
+              TokenKind::Comma,
+              Parser::parse_expression
+            ),
+          )
+        }
+        Some((_, TokenKind::Operator(operator))) => match operator.as_str() {
+          "." => {
+            self.tokens.next();
+            expression = Expression::Field(
+              Box::new(expression),
+              match self.tokens.next() {
+                Some((_, TokenKind::Identifier(name))) => FieldAccess::Identifier(name.clone()),
+                token => Err(self.unexpected_token(token))?,
+              },
+            )
+          }
+          "[" => {
+            self.tokens.next();
+            expression =
+              Expression::Index(Box::new(expression), Box::new(self.parse_expression()?));
+
+            match self.tokens.next() {
+              Some((_, TokenKind::RightBracket)) => {}
+              token => Err(self.unexpected_token(token))?,
+            }
+          }
+          "=" => {
+            self.tokens.next();
+            expression =
+              Expression::Assignment(Box::new(expression), Box::new(self.parse_expression()?))
+          }
+          _ => break,
+        },
+        _ => break,
+      };
+    }
+
+    Ok(expression)
   }
 
   fn parse_enum(&mut self) -> Result<Enum, Error<ParserError>> {
@@ -118,6 +323,83 @@ impl Parser<'_> {
     );
 
     Ok(Enum { name, variants })
+  }
+
+  // operator overloading
+  /*
+
+  e.g.
+
+  op + (a: i32, b: i32): i32 {
+    a + b
+  }
+
+  op ~ (a: bool): bool {
+    !a
+  }
+
+  */
+  fn parse_operator(&mut self) -> Result<Operator, Error<ParserError>> {
+    match self.tokens.next() {
+      Some((_, TokenKind::Op)) => {}
+      token => Err(self.unexpected_token(token))?,
+    }
+
+    let operator = match self.tokens.next() {
+      Some((_, TokenKind::Operator(operator))) => operator,
+      token => Err(self.unexpected_token(token))?,
+    }
+    .to_string();
+
+    match self.tokens.next() {
+      Some((_, TokenKind::LeftParen)) => {}
+      token => Err(self.unexpected_token(token))?,
+    }
+
+    let a = self.parse_parameter()?;
+
+    Ok(match self.tokens.peek().copied() {
+      Some((_, TokenKind::Comma)) => {
+        self.tokens.next();
+
+        let b = self.parse_parameter()?;
+
+        match self.tokens.next() {
+          Some((_, TokenKind::RightParen)) => {}
+          token => Err(self.unexpected_token(token))?,
+        }
+
+        match self.tokens.next() {
+          Some((_, TokenKind::Operator(operator))) if operator == "->" => {}
+          token => Err(self.unexpected_token(token))?,
+        }
+
+        Operator::Infix {
+          operator,
+          operands: (a, b),
+          result: self.parse_type()?,
+          body: self.parse_expression()?,
+        }
+      }
+      _ => {
+        match self.tokens.next() {
+          Some((_, TokenKind::RightParen)) => {}
+          token => Err(self.unexpected_token(token))?,
+        }
+
+        match self.tokens.next() {
+          Some((_, TokenKind::Operator(operator))) if operator == "->" => {}
+          token => Err(self.unexpected_token(token))?,
+        }
+
+        Operator::Prefix {
+          operator,
+          operand: a,
+          result: self.parse_type()?,
+          body: self.parse_expression()?,
+        }
+      }
+    })
   }
 
   fn parse_variant(&mut self) -> Result<Variant, Error<ParserError>> {
