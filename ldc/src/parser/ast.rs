@@ -17,7 +17,7 @@ pub enum Item {
 pub struct Function {
   pub name: String,
   pub parameters: Vec<Parameter>,
-  pub return_type: Type,
+  pub return_type: Option<Type>,
   pub body: Expression,
 }
 
@@ -110,7 +110,7 @@ pub enum Expression {
   Return(Box<Expression>),
   Declaration(String),
   Assignment(Box<Expression>, Box<Expression>),
-  DeclarationAssignment(String, Box<Expression>),
+  DeclarationAssignment(String, Option<Type>, Box<Expression>),
   Call(Box<Expression>, Vec<Expression>),
   Field(Box<Expression>, FieldAccess),
   Index(Box<Expression>, Box<Expression>),
@@ -134,4 +134,5 @@ pub enum Literal {
   String(String),
   Tuple(Vec<Expression>),
   Array(Vec<Expression>),
+  Closure(Vec<Parameter>, Option<Type>, Box<Expression>),
 }

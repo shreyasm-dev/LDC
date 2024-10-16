@@ -273,7 +273,7 @@ impl<'a> Lexer<'a> {
         break;
       }
 
-      if let TokenKind::Whitespace(_) = kind {
+      if let TokenKind::Whitespace(_) | TokenKind::Comment(_) = kind {
         if !emit_ignored {
           continue;
         }

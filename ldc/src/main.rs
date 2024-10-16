@@ -14,14 +14,20 @@ fn main() {
     A(b, c | d | e | f)
   }
 
-  fn main() -> () {
+  fn main(): () {
     (x)().y(if a b else if c d else e).z;
     while x y;
     x = y;
     [if a b] = c
   }
 
-  op + (a: b, c: d) -> e f[g]
+  op -(a: b): c {
+    d
+  }
+
+  op +(a: b, c: d): e f[g]
+
+  fn x(): fn(a, b): c fn(y: a, z: b): c xyz
 "#
   .trim();
 

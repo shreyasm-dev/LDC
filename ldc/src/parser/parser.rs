@@ -42,6 +42,15 @@ macro_rules! list {
   }};
 }
 
+macro_rules! expect {
+  ($self:ident, $next:expr, $($token:path => $block:block),*) => {
+    match if $next { $self.tokens.next() } else { $self.tokens.peek().copied() } {
+      $(Some((_, $token)) => Ok($block),)*
+      token => Err($self.unexpected_token(token, vec![$($token),*])),
+    }
+  }
+}
+
 pub struct Parser<'a> {
   pub tokens: Peekable<Iter<'a, Token>>,
 }
@@ -129,14 +138,13 @@ impl Parser<'_> {
   }
 
   fn parse_item(&mut self) -> Result<Item, Error<ParserError>> {
-    Ok(match self.tokens.peek().copied() {
-      Some((_, TokenKind::Fn)) => Item::Function(self.parse_function()?),
-      Some((_, TokenKind::Enum)) => Item::Enum(self.parse_enum()?),
-      Some((_, TokenKind::Op)) => Item::Operator(self.parse_operator()?),
-      token => {
-        Err(self.unexpected_token(token, vec![TokenKind::Fn, TokenKind::Enum, TokenKind::Op]))?
-      }
-    })
+    expect! {
+      self,
+      false,
+      TokenKind::Fn => { Item::Function(self.parse_function()?) },
+      TokenKind::Enum => { Item::Enum(self.parse_enum()?) },
+      TokenKind::Op => { Item::Operator(self.parse_operator()?) }
+    }
   }
 
   fn parse_function(&mut self) -> Result<Function, Error<ParserError>> {
@@ -153,15 +161,7 @@ impl Parser<'_> {
       Parser::parse_parameter
     );
 
-    let return_type = match self.tokens.peek() {
-      Some((_, TokenKind::Operator(operator))) if operator == "->" => {
-        self.tokens.next();
-        Some(self.parse_type()?)
-      }
-      _ => None,
-    }
-    .unwrap_or(Type::Tuple(Vec::new()));
-
+    let return_type = self.parse_return_type(true)?;
     let body = self.parse_expression()?;
 
     Ok(Function {
@@ -205,17 +205,6 @@ impl Parser<'_> {
         Ok(Expression::While(condition, body))
       }
       Some((_, TokenKind::Return)) => Ok(Expression::Return(Box::new(self.parse_expression()?))),
-      Some((_, TokenKind::Let)) => {
-        let name = self.expect_identifier()?;
-
-        Ok(match self.tokens.next() {
-          Some((_, TokenKind::Operator(operator))) if operator == "=" => {
-            let value = Box::new(self.parse_expression()?);
-            Expression::DeclarationAssignment(name, value)
-          }
-          _ => Expression::Declaration(name),
-        })
-      }
       Some((_, TokenKind::LeftBrace)) => {
         let mut ended = false;
         let mut value = false;
@@ -255,6 +244,25 @@ impl Parser<'_> {
       Some((_, TokenKind::StringLiteral(value))) => {
         Ok(Expression::Literal(Literal::String(value.clone())))
       }
+      Some((_, TokenKind::Fn)) => {
+        self.expect(vec![TokenKind::LeftParen])?;
+
+        let parameters = list!(
+          self,
+          TokenKind::RightParen,
+          TokenKind::Comma,
+          Parser::parse_parameter
+        );
+
+        let return_type = self.parse_return_type(true)?;
+        let body = self.parse_expression()?;
+
+        Ok(Expression::Literal(Literal::Closure(
+          parameters,
+          return_type,
+          Box::new(body),
+        )))
+      }
       Some((_, TokenKind::LeftParen)) => Ok(Expression::Literal(Literal::Tuple(list!(
         self,
         TokenKind::RightParen,
@@ -277,6 +285,7 @@ impl Parser<'_> {
           TokenKind::Let,
           TokenKind::LeftBrace,
           TokenKind::StringLiteral("".to_string()),
+          TokenKind::Fn,
           TokenKind::LeftParen,
           TokenKind::LeftBracket,
         ],
@@ -354,34 +363,32 @@ impl Parser<'_> {
     self.expect(vec![TokenKind::LeftParen])?;
 
     let a = self.parse_parameter()?;
-
-    Ok(match self.tokens.peek().copied() {
+    let b = match self.tokens.peek() {
       Some((_, TokenKind::Comma)) => {
         self.tokens.next();
-
-        let b = self.parse_parameter()?;
-
-        self.expect(vec![TokenKind::RightParen])?;
-        self.expect_operator(vec!["->"])?;
-
-        Operator::Infix {
-          operator,
-          operands: (a, b),
-          result: self.parse_type()?,
-          body: self.parse_expression()?,
-        }
+        Some(self.parse_parameter()?)
       }
-      _ => {
-        self.expect(vec![TokenKind::RightParen])?;
-        self.expect_operator(vec!["->"])?;
+      _ => None,
+    };
 
-        Operator::Prefix {
-          operator,
-          operand: a,
-          result: self.parse_type()?,
-          body: self.parse_expression()?,
-        }
-      }
+    self.expect(vec![TokenKind::RightParen])?;
+
+    let result = self.parse_return_type(false)?.unwrap();
+    let body = self.parse_expression()?;
+
+    Ok(match b {
+      Some(b) => Operator::Infix {
+        operator,
+        operands: (a, b),
+        result,
+        body,
+      },
+      None => Operator::Prefix {
+        operator,
+        operand: a,
+        result,
+        body,
+      },
     })
   }
 
@@ -445,7 +452,6 @@ impl Parser<'_> {
         TokenKind::F32 => Type::F32,
         TokenKind::F64 => Type::F64,
         TokenKind::F128 => Type::F128,
-
         TokenKind::LeftParen => {
           let list = list!(
             self,
@@ -467,13 +473,24 @@ impl Parser<'_> {
             _ => Type::Tuple(list),
           }
         }
-
         TokenKind::LeftBracket => {
           let ty = Box::new(self.parse_type()?);
           self.expect(vec![TokenKind::RightBracket])?;
           Type::Array(ty)
         }
+        TokenKind::Fn => {
+          self.expect(vec![TokenKind::LeftParen])?;
 
+          let parameters = list!(
+            self,
+            TokenKind::RightParen,
+            TokenKind::Comma,
+            Parser::parse_type
+          );
+          let return_type = self.parse_return_type(false)?.unwrap();
+
+          Type::Function(parameters, Box::new(return_type))
+        }
         _ => Err(self.unexpected_token(Some(token), expected))?,
       }),
       None => Err(self.unexpected_token(None, expected))?,
@@ -489,6 +506,22 @@ impl Parser<'_> {
       }
     } else {
       ty
+    }
+  }
+
+  fn parse_return_type(&mut self, optional: bool) -> Result<Option<Type>, Error<ParserError>> {
+    match self.tokens.peek().copied() {
+      Some((_, TokenKind::Operator(operator))) if operator == ":" => {
+        self.tokens.next();
+        Ok(Some(self.parse_type()?))
+      }
+      token => {
+        if optional {
+          Ok(None)
+        } else {
+          Err(self.unexpected_token(token, vec![TokenKind::Operator(":".to_string())]))
+        }
+      }
     }
   }
 }
