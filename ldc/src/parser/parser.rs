@@ -9,7 +9,7 @@ use crate::{
 use std::{iter::Peekable, slice::Iter};
 
 macro_rules! list {
-  ($self:ident, $end:pat, $separator:pat, $parse:expr) => {{
+  ($self:ident, $end:path, $separator:path, $parse:expr) => {{
     let mut items = Vec::new();
 
     match $self.tokens.peek() {
@@ -28,11 +28,14 @@ macro_rules! list {
               $self.tokens.next();
               break;
             }
-            token => Err($self.unexpected_token(token))?,
+            token => Err($self.unexpected_token(token, vec![$separator, $end]))?,
           }
         }
       }
-      None => Err($self.error(None, ParserError::UnexpectedToken(None)))?,
+      None => Err($self.error(
+        None,
+        ParserError::UnexpectedToken(None, vec![$separator, $end]),
+      ))?,
     }
 
     items
@@ -53,11 +56,56 @@ impl Parser<'_> {
     Error(token.map_or(0..0, |t| t.0.clone()), error)
   }
 
-  pub fn unexpected_token(&self, token: Option<&Token>) -> Error<ParserError> {
+  pub fn unexpected_token(
+    &self,
+    token: Option<&Token>,
+    expected: Vec<TokenKind>,
+  ) -> Error<ParserError> {
     self.error(
       token,
-      ParserError::UnexpectedToken(token.map(|t| t.1.clone())),
+      ParserError::UnexpectedToken(token.map(|t| t.1.clone()), expected),
     )
+  }
+
+  pub fn expect(&mut self, expected: Vec<TokenKind>) -> Result<Token, Error<ParserError>> {
+    match self.tokens.next() {
+      Some(token) => {
+        if expected.contains(&token.1) {
+          Ok(token.clone())
+        } else {
+          Err(self.unexpected_token(Some(token), expected))
+        }
+      }
+      None => Err(self.unexpected_token(None, expected)),
+    }
+  }
+
+  pub fn expect_operator(&mut self, operators: Vec<&str>) -> Result<String, Error<ParserError>> {
+    let expected = operators
+      .iter()
+      .map(|&o| TokenKind::Operator(o.to_string()))
+      .collect::<Vec<_>>();
+
+    match self.tokens.next() {
+      Some((span, TokenKind::Operator(operator))) => {
+        if operators.contains(&operator.as_str()) {
+          Ok(operator.to_string())
+        } else {
+          Err(self.unexpected_token(
+            Some(&(span.clone(), TokenKind::Operator(operator.to_string()))),
+            expected,
+          ))?
+        }
+      }
+      token => Err(self.unexpected_token(token, expected))?,
+    }
+  }
+
+  pub fn expect_identifier(&mut self) -> Result<String, Error<ParserError>> {
+    match self.tokens.next() {
+      Some((_, TokenKind::Identifier(name))) => Ok(name.to_string()),
+      token => Err(self.unexpected_token(token, vec![TokenKind::Identifier("".to_string())]))?,
+    }
   }
 
   pub fn parse(&mut self) -> Result<Module, Error<ParserError>> {
@@ -65,23 +113,14 @@ impl Parser<'_> {
 
     loop {
       match self.tokens.peek() {
-        None => break,
+        None | Some((_, TokenKind::Eof)) => break,
         Some(&token) => {
           let public = token.1 == TokenKind::Pub;
-          match if public {
-            self.tokens.next()
-          } else {
-            Some(token)
-          } {
-            Some((_, TokenKind::Eof)) | None => {
-              if public {
-                Err(self.unexpected_token(Some(token)))?
-              } else {
-                break;
-              }
-            }
-            Some(_) => items.push((public, self.parse_item()?)),
+          if public {
+            self.tokens.next();
           }
+
+          items.push((public, self.parse_item()?));
         }
       }
     }
@@ -94,26 +133,18 @@ impl Parser<'_> {
       Some((_, TokenKind::Fn)) => Item::Function(self.parse_function()?),
       Some((_, TokenKind::Enum)) => Item::Enum(self.parse_enum()?),
       Some((_, TokenKind::Op)) => Item::Operator(self.parse_operator()?),
-      token => Err(self.unexpected_token(token))?,
+      token => {
+        Err(self.unexpected_token(token, vec![TokenKind::Fn, TokenKind::Enum, TokenKind::Op]))?
+      }
     })
   }
 
   fn parse_function(&mut self) -> Result<Function, Error<ParserError>> {
-    match self.tokens.next() {
-      Some((_, TokenKind::Fn)) => {}
-      token => Err(self.unexpected_token(token))?,
-    }
+    self.expect(vec![TokenKind::Fn])?;
 
-    let name = match self.tokens.next() {
-      Some((_, TokenKind::Identifier(name))) => name,
-      token => Err(self.unexpected_token(token))?,
-    }
-    .to_string();
+    let name = self.expect_identifier()?;
 
-    match self.tokens.next() {
-      Some((_, TokenKind::LeftParen)) => {}
-      token => Err(self.unexpected_token(token))?,
-    }
+    self.expect(vec![TokenKind::LeftParen])?;
 
     let parameters = list!(
       self,
@@ -142,16 +173,9 @@ impl Parser<'_> {
   }
 
   fn parse_parameter(&mut self) -> Result<Parameter, Error<ParserError>> {
-    let name = match self.tokens.next() {
-      Some((_, TokenKind::Identifier(name))) => name,
-      token => Err(self.unexpected_token(token))?,
-    }
-    .to_string();
+    let name = self.expect_identifier()?;
 
-    match self.tokens.next() {
-      Some((_, TokenKind::Operator(operator))) if operator == ":" => {}
-      token => Err(self.unexpected_token(token))?,
-    }
+    self.expect_operator(vec![":"])?;
 
     let ty = self.parse_type()?;
 
@@ -182,11 +206,7 @@ impl Parser<'_> {
       }
       Some((_, TokenKind::Return)) => Ok(Expression::Return(Box::new(self.parse_expression()?))),
       Some((_, TokenKind::Let)) => {
-        let name = match self.tokens.next() {
-          Some((_, TokenKind::Identifier(name))) => name,
-          token => Err(self.unexpected_token(token))?,
-        }
-        .to_string();
+        let name = self.expect_identifier()?;
 
         Ok(match self.tokens.next() {
           Some((_, TokenKind::Operator(operator))) if operator == "=" => {
@@ -209,7 +229,9 @@ impl Parser<'_> {
             }
             token => {
               if ended {
-                Err(self.unexpected_token(token))?;
+                Err(
+                  self.unexpected_token(token, vec![TokenKind::Semicolon, TokenKind::RightBrace]),
+                )?;
               }
 
               value = true;
@@ -245,7 +267,20 @@ impl Parser<'_> {
         TokenKind::Comma,
         Parser::parse_expression
       )))),
-      token => Err(self.unexpected_token(token))?,
+      token => Err(self.unexpected_token(
+        token,
+        vec![
+          TokenKind::Identifier("".to_string()),
+          TokenKind::If,
+          TokenKind::While,
+          TokenKind::Return,
+          TokenKind::Let,
+          TokenKind::LeftBrace,
+          TokenKind::StringLiteral("".to_string()),
+          TokenKind::LeftParen,
+          TokenKind::LeftBracket,
+        ],
+      ))?,
     }?;
 
     // TODO: better way to handle this?
@@ -268,21 +303,8 @@ impl Parser<'_> {
             self.tokens.next();
             expression = Expression::Field(
               Box::new(expression),
-              match self.tokens.next() {
-                Some((_, TokenKind::Identifier(name))) => FieldAccess::Identifier(name.clone()),
-                token => Err(self.unexpected_token(token))?,
-              },
-            )
-          }
-          "[" => {
-            self.tokens.next();
-            expression =
-              Expression::Index(Box::new(expression), Box::new(self.parse_expression()?));
-
-            match self.tokens.next() {
-              Some((_, TokenKind::RightBracket)) => {}
-              token => Err(self.unexpected_token(token))?,
-            }
+              FieldAccess::Identifier(self.expect_identifier()?),
+            );
           }
           "=" => {
             self.tokens.next();
@@ -291,6 +313,11 @@ impl Parser<'_> {
           }
           _ => break,
         },
+        Some((_, TokenKind::LeftBracket)) => {
+          self.tokens.next();
+          expression = Expression::Index(Box::new(expression), Box::new(self.parse_expression()?));
+          self.expect(vec![TokenKind::RightBracket])?;
+        }
         _ => break,
       };
     }
@@ -299,21 +326,11 @@ impl Parser<'_> {
   }
 
   fn parse_enum(&mut self) -> Result<Enum, Error<ParserError>> {
-    match self.tokens.next() {
-      Some((_, TokenKind::Enum)) => {}
-      token => Err(self.unexpected_token(token))?,
-    }
+    self.expect(vec![TokenKind::Enum])?;
 
-    let name = match self.tokens.next() {
-      Some((_, TokenKind::Identifier(name))) => name,
-      token => Err(self.unexpected_token(token))?,
-    }
-    .to_string();
+    let name = self.expect_identifier()?;
 
-    match self.tokens.next() {
-      Some((_, TokenKind::LeftBrace)) => {}
-      token => Err(self.unexpected_token(token))?,
-    }
+    self.expect(vec![TokenKind::LeftBrace])?;
 
     let variants = list!(
       self,
@@ -325,36 +342,16 @@ impl Parser<'_> {
     Ok(Enum { name, variants })
   }
 
-  // operator overloading
-  /*
-
-  e.g.
-
-  op + (a: i32, b: i32): i32 {
-    a + b
-  }
-
-  op ~ (a: bool): bool {
-    !a
-  }
-
-  */
   fn parse_operator(&mut self) -> Result<Operator, Error<ParserError>> {
-    match self.tokens.next() {
-      Some((_, TokenKind::Op)) => {}
-      token => Err(self.unexpected_token(token))?,
-    }
+    self.expect(vec![TokenKind::Op])?;
 
     let operator = match self.tokens.next() {
       Some((_, TokenKind::Operator(operator))) => operator,
-      token => Err(self.unexpected_token(token))?,
+      token => Err(self.unexpected_token(token, vec![TokenKind::Operator("".to_string())]))?,
     }
     .to_string();
 
-    match self.tokens.next() {
-      Some((_, TokenKind::LeftParen)) => {}
-      token => Err(self.unexpected_token(token))?,
-    }
+    self.expect(vec![TokenKind::LeftParen])?;
 
     let a = self.parse_parameter()?;
 
@@ -364,15 +361,8 @@ impl Parser<'_> {
 
         let b = self.parse_parameter()?;
 
-        match self.tokens.next() {
-          Some((_, TokenKind::RightParen)) => {}
-          token => Err(self.unexpected_token(token))?,
-        }
-
-        match self.tokens.next() {
-          Some((_, TokenKind::Operator(operator))) if operator == "->" => {}
-          token => Err(self.unexpected_token(token))?,
-        }
+        self.expect(vec![TokenKind::RightParen])?;
+        self.expect_operator(vec!["->"])?;
 
         Operator::Infix {
           operator,
@@ -382,15 +372,8 @@ impl Parser<'_> {
         }
       }
       _ => {
-        match self.tokens.next() {
-          Some((_, TokenKind::RightParen)) => {}
-          token => Err(self.unexpected_token(token))?,
-        }
-
-        match self.tokens.next() {
-          Some((_, TokenKind::Operator(operator))) if operator == "->" => {}
-          token => Err(self.unexpected_token(token))?,
-        }
+        self.expect(vec![TokenKind::RightParen])?;
+        self.expect_operator(vec!["->"])?;
 
         Operator::Prefix {
           operator,
@@ -403,11 +386,7 @@ impl Parser<'_> {
   }
 
   fn parse_variant(&mut self) -> Result<Variant, Error<ParserError>> {
-    let name = match self.tokens.next() {
-      Some((_, TokenKind::Identifier(name))) => name,
-      token => Err(self.unexpected_token(token))?,
-    }
-    .to_string();
+    let name = self.expect_identifier()?;
 
     let fields = match self.tokens.peek() {
       Some((_, TokenKind::LeftParen)) => {
@@ -426,6 +405,27 @@ impl Parser<'_> {
   }
 
   fn parse_type(&mut self) -> Result<Type, Error<ParserError>> {
+    let expected = vec![
+      TokenKind::Identifier("".to_string()),
+      TokenKind::Char,
+      TokenKind::I8,
+      TokenKind::I16,
+      TokenKind::I32,
+      TokenKind::I64,
+      TokenKind::I128,
+      TokenKind::U8,
+      TokenKind::U16,
+      TokenKind::U32,
+      TokenKind::U64,
+      TokenKind::U128,
+      TokenKind::F16,
+      TokenKind::F32,
+      TokenKind::F64,
+      TokenKind::F128,
+      TokenKind::LeftParen,
+      TokenKind::LeftBracket,
+    ];
+
     let ty = match self.tokens.next() {
       Some(token) => Ok(match &token.1 {
         TokenKind::Identifier(name) => Type::Named(name.to_string()),
@@ -470,15 +470,13 @@ impl Parser<'_> {
 
         TokenKind::LeftBracket => {
           let ty = Box::new(self.parse_type()?);
-          match self.tokens.next() {
-            Some((_, TokenKind::RightBracket)) => Type::Array(ty),
-            token => Err(self.unexpected_token(token))?,
-          }
+          self.expect(vec![TokenKind::RightBracket])?;
+          Type::Array(ty)
         }
 
-        _ => Err(self.unexpected_token(Some(token)))?,
+        _ => Err(self.unexpected_token(Some(token), expected))?,
       }),
-      None => Err(self.unexpected_token(None))?,
+      None => Err(self.unexpected_token(None, expected))?,
     };
 
     if let Some(&(_, TokenKind::Operator(operator))) = self.tokens.peek() {

@@ -29,7 +29,7 @@ pub enum LexerError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserError {
-  UnexpectedToken(Option<TokenKind>),
+  UnexpectedToken(Option<TokenKind>, Vec<TokenKind>),
 }
 
 impl Reportable for LexerError {
@@ -103,12 +103,24 @@ impl Reportable for ParserError {
       .with_label(
         Label::new((&*name, span.clone()))
           .with_message(match self {
-            ParserError::UnexpectedToken(None)
-            | ParserError::UnexpectedToken(Some(TokenKind::Eof)) => {
-              "Unexpected end of input".to_string()
-            }
-            ParserError::UnexpectedToken(Some(token)) => {
-              format!("Unexpected token `{:?}`", token)
+            ParserError::UnexpectedToken(token, expected) => {
+              let items = expected
+                .iter()
+                .map(|c| format!("{}", c).fg(b).to_string())
+                .collect::<Vec<_>>();
+
+              format!(
+                "Unexpected {}{}",
+                match token {
+                  None | Some(TokenKind::Eof) => "end of input".to_string(),
+                  Some(t) => format!("{}", t).fg(b).to_string(),
+                },
+                if items.is_empty() {
+                  "".to_string()
+                } else {
+                  format!(", expected {}", items.join(", "))
+                }
+              )
             }
           })
           .with_color(b),

@@ -89,3 +89,61 @@ impl TokenKind {
     }
   }
 }
+
+impl std::fmt::Display for TokenKind {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "{}",
+      match self {
+        TokenKind::Whitespace(_) => "whitespace",
+        TokenKind::Comment(_) => "comment",
+        TokenKind::Eof => "end of input",
+
+        TokenKind::Identifier(_) => "identifier",
+        TokenKind::StringLiteral(_) => "string literal",
+
+        TokenKind::Fn => "fn",
+        TokenKind::Op => "op",
+        TokenKind::Struct => "struct",
+        TokenKind::Enum => "enum",
+        TokenKind::Trait => "trait",
+        TokenKind::Let => "let",
+        TokenKind::Pub => "pub",
+        TokenKind::Self_ => "self",
+        TokenKind::While => "while",
+        TokenKind::If => "if",
+        TokenKind::Else => "else",
+        TokenKind::Return => "return",
+
+        TokenKind::Char => "char",
+        TokenKind::I8 => "i8",
+        TokenKind::I16 => "i16",
+        TokenKind::I32 => "i32",
+        TokenKind::I64 => "i64",
+        TokenKind::I128 => "i128",
+        TokenKind::U8 => "u8",
+        TokenKind::U16 => "u16",
+        TokenKind::U32 => "u32",
+        TokenKind::U64 => "u64",
+        TokenKind::U128 => "u128",
+        TokenKind::F16 => "f16",
+        TokenKind::F32 => "f32",
+        TokenKind::F64 => "f64",
+        TokenKind::F128 => "f128",
+
+        TokenKind::LeftParen => "left parenthesis",
+        TokenKind::RightParen => "right parenthesis",
+        TokenKind::LeftBrace => "left brace",
+        TokenKind::RightBrace => "right brace",
+        TokenKind::LeftBracket => "left bracket",
+        TokenKind::RightBracket => "right bracket",
+
+        TokenKind::Comma => "comma",
+        TokenKind::Semicolon => "semicolon",
+
+        TokenKind::Operator(_) => "operator",
+      }
+    )
+  }
+}

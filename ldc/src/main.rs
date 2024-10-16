@@ -21,7 +21,7 @@ fn main() {
     [if a b] = c
   }
 
-  op + (a: b, c: d) -> e f
+  op + (a: b, c: d) -> e f[g]
 "#
   .trim();
 
