@@ -261,6 +261,9 @@ impl Parser<'_> {
       Some((_, TokenKind::StringLiteral(value))) => {
         Ok(Expression::Literal(Literal::String(value.clone())))
       }
+      Some((_, TokenKind::CharLiteral(value))) => {
+        Ok(Expression::Literal(Literal::Char(value.clone())))
+      }
       Some((_, TokenKind::Fn)) => {
         self.expect(vec![TokenKind::LeftParen])?;
 

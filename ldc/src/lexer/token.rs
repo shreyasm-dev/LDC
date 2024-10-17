@@ -10,6 +10,7 @@ pub enum TokenKind {
 
   Identifier(String),
   StringLiteral(String),
+  CharLiteral(char),
 
   Fn,
   Op,
@@ -146,6 +147,7 @@ impl std::fmt::Display for TokenKind {
 
         TokenKind::Identifier(_) => "identifier",
         TokenKind::StringLiteral(_) => "string literal",
+        TokenKind::CharLiteral(_) => "character literal",
 
         TokenKind::Fn => "fn",
         TokenKind::Op => "op",

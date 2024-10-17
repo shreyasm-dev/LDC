@@ -7,19 +7,19 @@ use std::{
 };
 
 macro_rules! escape {
-  ($l:lifetime, $span:expr, $x:expr, $string:expr, $($c:expr => $r:expr),* $(,)?) => {
+  ($span:expr, $x:expr, $string:expr, $($c:expr => $r:expr),* $(,)?) => {
     match $x {
       $(
-        $c => $string.push($r),
+        $c => Ok($r),
       )*
       _ => {
-        break $l Err(Error(
+        Err(Error(
           $span,
           LexerError::UnexpectedCharacter($x, &[], &[$($c),*]),
-        ));
+        ))
       },
     }
-  };
+  }
 }
 
 macro_rules! match_operators {
@@ -139,79 +139,26 @@ impl<'a> Lexer<'a> {
           },
         ))),
 
-        '"' => 'string: {
+        '"' => {
           let mut string = String::new();
 
           loop {
-            match self.advance() {
-              Some('"') => break,
-              Some(c) => match c {
-                '\\' => match self.advance() {
-                  Some(c) => {
-                    escape!(
-                      'string,
-                      self.last_char(),
-                      c,
-                      string,
-                      'n' => '\n',
-                      'r' => '\r',
-                      't' => '\t',
-                      '0' => '\0',
-                      '\\' => '\\',
-                      '"' => '"',
-                      '{' => {
-                        let mut code = String::new();
-
-                        loop {
-                          match self.advance() {
-                            Some(c) => match c {
-                              '0'..='9' | 'a'..='f' | 'A'..='F' => code.push(c),
-                              '}' => break,
-                              _ => {
-                                break 'string Err(self.unexpected_character(
-                                  c,
-                                  &['0'..='9', 'a'..='f', 'A'..='F'],
-                                  &['}'],
-                                ))
-                              }
-                            },
-                            None => {
-                              break 'string Err(self.eof())
-                            }
-                          }
-                        }
-
-                        match u32::from_str_radix(&code, 16) {
-                          Ok(codepoint) => {
-                            match std::char::from_u32(codepoint) {
-                              Some(c) => c,
-                              None => {
-                                break 'string Err(Error(
-                                  self.last_char(),
-                                  LexerError::InvalidCodepoint(code),
-                                ))
-                              }
-                            }
-                          }
-                          Err(_) => {
-                            break 'string Err(Error(
-                              self.last_char(),
-                              LexerError::InvalidCodepoint(code),
-                            ))
-                          }
-                        }
-                      }
-                    )
-                  }
-                  None => break 'string Err(self.eof()),
-                },
-                c => string.push(c),
-              },
-              None => break 'string Err(self.eof()),
-            }
+            string.push(match self.lex_char()? {
+              '"' => break,
+              c => c,
+            });
           }
 
           Ok(TokenKind::StringLiteral(string))
+        }
+
+        '\'' => {
+          let c = self.lex_char()?;
+          match self.advance() {
+            Some('\'') => Ok(TokenKind::CharLiteral(c)),
+            Some(c) => Err(self.unexpected_character(c, &[], &['\'']))?,
+            None => Err(self.eof())?,
+          }
         }
 
         '(' => Ok(TokenKind::LeftParen),
@@ -242,7 +189,7 @@ impl<'a> Lexer<'a> {
 
             Ok(TokenKind::Comment(comment))
           }
-          Some('*') => 'operator: {
+          Some('*') => {
             self.advance();
 
             let mut comment = String::new();
@@ -255,10 +202,10 @@ impl<'a> Lexer<'a> {
                     comment.push('*');
                     comment.push(c);
                   }
-                  None => break 'operator Err(self.eof()),
+                  None => Err(self.eof())?,
                 },
                 Some(c) => comment.push(c),
-                None => break 'operator Err(self.eof()),
+                None => Err(self.eof())?,
               }
             }
 
@@ -314,6 +261,73 @@ impl<'a> Lexer<'a> {
     self.reset();
 
     Ok((span, result))
+  }
+
+  pub fn lex_char(&mut self) -> Result<char, Error<LexerError>> {
+    match self.advance() {
+      Some(c) => match c {
+        '\\' => match self.advance() {
+          Some(c) => {
+            escape!(
+              self.last_char(),
+              c,
+              string,
+              'n' => '\n',
+              'r' => '\r',
+              't' => '\t',
+              '0' => '\0',
+              '\\' => '\\',
+              '"' => '"',
+              '{' => {
+                let mut code = String::new();
+
+                loop {
+                  match self.advance() {
+                    Some(c) => match c {
+                      '0'..='9' | 'a'..='f' | 'A'..='F' => code.push(c),
+                      '}' => break,
+                      _ => {
+                        Err(self.unexpected_character(
+                          c,
+                          &['0'..='9', 'a'..='f', 'A'..='F'],
+                          &['}'],
+                        ))?
+                      }
+                    },
+                    None => {
+                      Err(self.eof())?
+                    }
+                  }
+                }
+
+                match u32::from_str_radix(&code, 16) {
+                  Ok(codepoint) => {
+                    match std::char::from_u32(codepoint) {
+                      Some(c) => c,
+                      None => {
+                        Err(Error(
+                          self.last_char(),
+                          LexerError::InvalidCodepoint(code),
+                        ))?
+                      }
+                    }
+                  }
+                  Err(_) => {
+                    Err(Error(
+                      self.last_char(),
+                      LexerError::InvalidCodepoint(code),
+                    ))?
+                  }
+                }
+              }
+            )
+          }
+          None => Err(self.eof()),
+        },
+        c => Ok(c),
+      },
+      None => Err(self.eof()),
+    }
   }
 
   pub fn lex(&mut self, emit_ignored: bool) -> Result<Vec<Token>, Error<LexerError>> {

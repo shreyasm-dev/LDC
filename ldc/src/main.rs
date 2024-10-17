@@ -25,7 +25,7 @@ fn main() {
     d
   }
 
-  op +(a: b, c: d): e f[g]
+  op +(a: b, c: d): e f['\{41}']
 
   // very readable
   fn x(): fn(a, b): c fn(y: a, z: b): c !(a + b * c + d > e -> ~~f + g)
