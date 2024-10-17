@@ -1,6 +1,5 @@
 use super::ast::{
-  Enum, Expression, FieldAccess, Function, Item, Literal, Module, Operator, Parameter, Type,
-  Variant,
+  Enum, Expression, Function, Item, Literal, Module, Operator, Parameter, Type, Variant,
 };
 use crate::{
   error::{Error, ParserError},
@@ -49,6 +48,25 @@ macro_rules! expect {
       token => Err($self.unexpected_token(token, vec![$($token),*])),
     }
   }
+}
+
+// https://news.ycombinator.com/item?id=13915458
+macro_rules! operator {
+  ($self:ident, $operator:expr, $expression:expr, $precedence:expr) => {
+    let op = TokenKind::Operator($operator.to_string());
+    $expression = if op.precedence() >= $precedence {
+      $self.tokens.next();
+      Expression::Infix(
+        Box::new($expression),
+        $operator.to_string(),
+        Box::new($self.parse_expression_with_precedence(
+          op.precedence() + if op.left_associative() { 1 } else { 0 },
+        )?),
+      )
+    } else {
+      break;
+    }
+  };
 }
 
 pub struct Parser<'a> {
@@ -183,6 +201,13 @@ impl Parser<'_> {
   }
 
   fn parse_expression(&mut self) -> Result<Expression, Error<ParserError>> {
+    self.parse_expression_with_precedence(0)
+  }
+
+  fn parse_expression_with_precedence(
+    &mut self,
+    precedence: u8,
+  ) -> Result<Expression, Error<ParserError>> {
     let mut expression = match self.tokens.next() {
       Some((_, TokenKind::Identifier(name))) => Ok(Expression::Identifier(name.clone())),
       Some((_, TokenKind::If)) => {
@@ -307,21 +332,18 @@ impl Parser<'_> {
             ),
           )
         }
-        Some((_, TokenKind::Operator(operator))) => match operator.as_str() {
-          "." => {
-            self.tokens.next();
-            expression = Expression::Field(
-              Box::new(expression),
-              FieldAccess::Identifier(self.expect_identifier()?),
-            );
+        Some((_, TokenKind::Operator(operator))) => {
+          operator!(self, operator, expression, precedence);
+
+          loop {
+            match self.tokens.peek() {
+              Some((_, TokenKind::Operator(operator))) => {
+                operator!(self, operator, expression, precedence);
+              }
+              _ => break,
+            }
           }
-          "=" => {
-            self.tokens.next();
-            expression =
-              Expression::Assignment(Box::new(expression), Box::new(self.parse_expression()?))
-          }
-          _ => break,
-        },
+        }
         Some((_, TokenKind::LeftBracket)) => {
           self.tokens.next();
           expression = Expression::Index(Box::new(expression), Box::new(self.parse_expression()?));

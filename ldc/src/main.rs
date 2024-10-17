@@ -17,7 +17,7 @@ fn main() {
   fn main(): () {
     (x)().y(if a b else if c d else e).z;
     while x y;
-    x = y;
+    x = y = z;
     [if a b] = c
   }
 
@@ -27,7 +27,8 @@ fn main() {
 
   op +(a: b, c: d): e f[g]
 
-  fn x(): fn(a, b): c fn(y: a, z: b): c xyz
+  // very readable
+  fn x(): fn(a, b): c fn(y: a, z: b): c a + b * c + d > e -> f
 "#
   .trim();
 

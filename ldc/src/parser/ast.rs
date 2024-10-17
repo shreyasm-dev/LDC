@@ -109,22 +109,13 @@ pub enum Expression {
   While(Box<Expression>, Box<Expression>),
   Return(Box<Expression>),
   Declaration(String),
-  Assignment(Box<Expression>, Box<Expression>),
-  DeclarationAssignment(String, Option<Type>, Box<Expression>),
   Call(Box<Expression>, Vec<Expression>),
-  Field(Box<Expression>, FieldAccess),
   Index(Box<Expression>, Box<Expression>),
   Literal(Literal),
   Infix(Box<Expression>, String, Box<Expression>),
   Prefix(String, Box<Expression>),
   Postfix(Box<Expression>, String),
   Identifier(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum FieldAccess {
-  Identifier(String),
-  Integer(usize),
 }
 
 // TODO: int, float

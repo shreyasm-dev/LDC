@@ -54,6 +54,49 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+  pub fn precedence(&self) -> u8 {
+    // https://dart.dev/language/operators
+    // TODO: prefix -
+    let operators = &[
+      vec!["..", "..=", "..<"],
+      vec!["??"],
+      vec!["||"],
+      vec!["&&"],
+      vec!["==", "!="],
+      vec![">=", ">", "<=", "<"],
+      vec!["->"],
+      vec!["|"],
+      vec!["^"],
+      vec!["&"],
+      vec!["<<", ">>", ">>>"],
+      vec!["+", "-", "~"],
+      vec!["*", "/", "%"],
+    ];
+
+    match self {
+      TokenKind::Operator(operator) => {
+        for (i, group) in operators.iter().enumerate() {
+          if group.contains(&operator.as_str()) {
+            return i as u8 + 1;
+          }
+        }
+
+        0
+      }
+      _ => 0,
+    }
+  }
+
+  pub fn left_associative(&self) -> bool {
+    match self {
+      TokenKind::Operator(operator) => match operator.as_str() {
+        "=" => false,
+        _ => true,
+      },
+      _ => false,
+    }
+  }
+
   pub fn from_identifier(ident: String) -> Self {
     match ident.as_str() {
       "fn" => TokenKind::Fn,

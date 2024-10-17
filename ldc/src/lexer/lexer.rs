@@ -22,6 +22,35 @@ macro_rules! escape {
   };
 }
 
+macro_rules! match_operators {
+  ($self:ident, $c:expr, $else:expr => $($op:expr)* $(,)?) => {
+    $(
+      if $c == $op.chars().next().unwrap() && 'matches: {
+        let mut cloned = $self.clone();
+
+        for (_, expected) in $op.chars().enumerate().skip(1) {
+          match cloned.input.peek() {
+            Some(&c) if c == expected => {
+              cloned.advance();
+            }
+            _ => {
+              break 'matches false;
+            }
+          }
+        }
+
+        let _ = std::mem::replace($self, cloned);
+
+        true
+      } {
+        Ok(TokenKind::Operator($op.to_string()))
+      }
+    ) else* else {
+      $else
+    }
+  };
+}
+
 #[derive(Debug, Clone)]
 pub struct Lexer<'a> {
   pub input: Peekable<Chars<'a>>,
@@ -74,9 +103,9 @@ impl<'a> Lexer<'a> {
     (self.end - 1)..self.end
   }
 
-  pub fn match_until<F>(&mut self, c: char, mut f: F) -> String
+  pub fn match_until<F>(&mut self, c: char, f: F) -> String
   where
-    F: FnMut(char) -> Option<String>,
+    F: Fn(char) -> Option<String>,
   {
     let mut result = String::new();
     result.push(c);
@@ -195,63 +224,87 @@ impl<'a> Lexer<'a> {
         ',' => Ok(TokenKind::Comma),
         ';' => Ok(TokenKind::Semicolon),
 
-        // TODO: more operators
-        '<' | '>' | ':' | '.' | '=' | '+' | '-' | '*' | '/' | '%' | '!' | '&' | '|'
-        | '^' | '?' => 'operator: {
-          if c == '/' {
-            // TODO: escaping
-            match self.advance() {
-              Some('/') => {
-                let mut comment = String::new();
+        '/' => match self.input.peek() {
+          Some('/') => {
+            self.advance();
 
-                while let Some(&c) = self.input.peek() {
-                  match c {
-                    '\n' => break,
-                    c => {
-                      comment.push(c);
-                      self.advance();
-                    }
-                  }
+            let mut comment = String::new();
+
+            while let Some(&c) = self.input.peek() {
+              match c {
+                '\n' => break,
+                c => {
+                  comment.push(c);
+                  self.advance();
                 }
-
-                break 'operator Ok(TokenKind::Comment(comment));
               }
-              Some('*') => {
-                let mut comment = String::new();
-
-                loop {
-                  match self.advance() {
-                    Some('*') => match self.advance() {
-                      Some('/') => break,
-                      Some(c) => {
-                        comment.push('*');
-                        comment.push(c);
-                      }
-                      None => break 'operator Err(self.eof()),
-                    },
-                    Some(c) => comment.push(c),
-                    None => break 'operator Err(self.eof()),
-                  }
-                }
-
-                break 'operator Ok(TokenKind::Comment(comment));
-              }
-              _ => (),
-            };
-          } else if c == '-' {
-            match self.input.peek() {
-              Some(&'>') => {
-                self.advance();
-                break 'operator Ok(TokenKind::Operator("->".to_string()));
-              }
-              _ => (),
             }
+
+            Ok(TokenKind::Comment(comment))
           }
+          Some('*') => 'operator: {
+            self.advance();
 
-          Ok(TokenKind::Operator(c.to_string()))
+            let mut comment = String::new();
+
+            loop {
+              match self.advance() {
+                Some('*') => match self.advance() {
+                  Some('/') => break,
+                  Some(c) => {
+                    comment.push('*');
+                    comment.push(c);
+                  }
+                  None => break 'operator Err(self.eof()),
+                },
+                Some(c) => comment.push(c),
+                None => break 'operator Err(self.eof()),
+              }
+            }
+
+            Ok(TokenKind::Comment(comment))
+          }
+          _ => Ok(TokenKind::Operator("/".to_string())),
+        },
+
+        _ => {
+          match_operators!(
+            self,
+            c,
+            Err(self.unexpected_character(c, &[], &[])) =>
+
+            ">>>"
+            "..="
+            "..<"
+
+            "=="
+            "!="
+            "<="
+            ">="
+            "&&"
+            "||"
+            ">>"
+            "<<"
+            "->"
+            ".."
+            "??"
+
+            "<"
+            ">"
+            ":"
+            "."
+            "="
+            "+"
+            "-"
+            "*"
+            "%"
+            "!"
+            "&"
+            "|"
+            "^"
+            "?"
+          )
         }
-
-        _ => Err(self.unexpected_character(c, &[], &[])),
       },
       None => Ok(TokenKind::Eof),
     }?;
@@ -317,6 +370,7 @@ mod tests {
         ),
         ((45..46), TokenKind::Semicolon),
         ((47..48), TokenKind::RightBrace),
+        ((48..48), TokenKind::Eof)
       ]
     );
   }
@@ -325,10 +379,13 @@ mod tests {
   fn test_string() {
     assert_eq!(
       Lexer::new(r#""hello, world!\n""#).lex(false).unwrap(),
-      vec![(
-        (0..17),
-        TokenKind::StringLiteral("hello, world!\n".to_string())
-      )]
+      vec![
+        (
+          (0..17),
+          TokenKind::StringLiteral("hello, world!\n".to_string())
+        ),
+        ((17..17), TokenKind::Eof)
+      ]
     );
 
     assert_eq!(
@@ -362,12 +419,18 @@ mod tests {
   fn test_comment() {
     assert_eq!(
       Lexer::new(r#"// hello, world!"#).lex(true).unwrap(),
-      vec![(0..16, TokenKind::Comment(" hello, world!".to_string()))]
+      vec![
+        (0..16, TokenKind::Comment(" hello, world!".to_string())),
+        (16..16, TokenKind::Eof)
+      ]
     );
 
     assert_eq!(
       Lexer::new(r#"/* hello, world! */"#).lex(true).unwrap(),
-      vec![(0..19, TokenKind::Comment(" hello, world! ".to_string()))]
+      vec![
+        (0..19, TokenKind::Comment(" hello, world! ".to_string())),
+        (19..19, TokenKind::Eof)
+      ]
     );
 
     assert_eq!(
@@ -382,14 +445,17 @@ mod tests {
       )
       .lex(true)
       .unwrap(),
-      vec![(
-        0..25,
-        TokenKind::Comment(
-          r#" hello, world!
+      vec![
+        (
+          0..25,
+          TokenKind::Comment(
+            r#" hello, world!
 \\**\/"#
-            .to_string()
-        )
-      )]
+              .to_string()
+          )
+        ),
+        (25..25, TokenKind::Eof)
+      ]
     );
   }
 }
