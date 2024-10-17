@@ -14,10 +14,15 @@ pub enum Item {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Function {
+pub struct Header {
   pub name: String,
   pub parameters: Vec<Parameter>,
   pub return_type: Option<Type>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Function {
+  pub header: Header,
   pub body: Expression,
 }
 
@@ -43,7 +48,8 @@ pub struct Struct {
   pub name: String,
   // (public, field)
   pub fields: Vec<(bool, Field)>,
-  pub methods: Vec<Function>,
+  // (public, method)
+  pub methods: Vec<(bool, Function)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -55,7 +61,7 @@ pub struct Enum {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Trait {
   pub name: String,
-  pub methods: Vec<Function>,
+  pub methods: Vec<Header>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -109,12 +115,12 @@ pub enum Expression {
   While(Box<Expression>, Box<Expression>),
   Return(Box<Expression>),
   Declaration(String),
+  // TODO: allow overloading for calling and indexing
   Call(Box<Expression>, Vec<Expression>),
   Index(Box<Expression>, Box<Expression>),
   Literal(Literal),
   Infix(Box<Expression>, String, Box<Expression>),
   Prefix(String, Box<Expression>),
-  Postfix(Box<Expression>, String),
   Identifier(String),
 }
 

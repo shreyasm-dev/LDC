@@ -28,7 +28,7 @@ fn main() {
   op +(a: b, c: d): e f[g]
 
   // very readable
-  fn x(): fn(a, b): c fn(y: a, z: b): c a + b * c + d > e -> f
+  fn x(): fn(a, b): c fn(y: a, z: b): c !(a + b * c + d > e -> ~~f + g)
 "#
   .trim();
 

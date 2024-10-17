@@ -54,35 +54,36 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
-  pub fn precedence(&self) -> u8 {
-    // https://dart.dev/language/operators
-    // TODO: prefix -
-    let operators = &[
-      vec!["..", "..=", "..<"],
-      vec!["??"],
-      vec!["||"],
-      vec!["&&"],
-      vec!["==", "!="],
-      vec![">=", ">", "<=", "<"],
-      vec!["->"],
-      vec!["|"],
-      vec!["^"],
-      vec!["&"],
-      vec!["<<", ">>", ">>>"],
-      vec!["+", "-", "~"],
-      vec!["*", "/", "%"],
-    ];
-
+  pub fn prefix_precedence(&self) -> u8 {
     match self {
-      TokenKind::Operator(operator) => {
-        for (i, group) in operators.iter().enumerate() {
-          if group.contains(&operator.as_str()) {
-            return i as u8 + 1;
-          }
-        }
+      TokenKind::Operator(operator) => match operator.as_str() {
+        "+" | "-" | "~" | "!" => 14,
+        _ => 0,
+      },
+      _ => 0,
+    }
+  }
 
-        0
-      }
+  pub fn infix_precedence(&self) -> u8 {
+    // https://dart.dev/language/operators
+    match self {
+      TokenKind::Operator(operator) => match operator.as_str() {
+        "." => 15,
+        "*" | "/" | "%" => 13,
+        "+" | "-" => 12,
+        "<<" | ">>" | ">>>" => 11,
+        "&" => 10,
+        "^" => 9,
+        "|" => 8,
+        "->" => 7,
+        "<" | "<=" | ">" | ">=" => 6,
+        "==" | "!=" => 5,
+        "&&" => 4,
+        "||" => 3,
+        "??" => 2,
+        ".." | "..=" | "..<" => 1,
+        _ => 0,
+      },
       _ => 0,
     }
   }
