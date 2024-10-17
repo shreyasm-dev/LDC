@@ -42,10 +42,10 @@ macro_rules! list {
 }
 
 macro_rules! expect {
-  ($self:ident, $next:expr, $($token:path => $block:block),*) => {
+  ($self:ident, $next:expr, $($token:pat = $value:expr => $block:block),*) => {
     match if $next { $self.tokens.next() } else { $self.tokens.peek().copied() } {
       $(Some((_, $token)) => Ok($block),)*
-      token => Err($self.unexpected_token(token, vec![$($token),*])),
+      token => Err($self.unexpected_token(token, vec![$($value),*])),
     }
   }
 }
@@ -137,13 +137,17 @@ impl Parser<'_> {
   }
 
   fn parse_item(&mut self) -> Result<Item, Error<ParserError>> {
-    expect! {
+    let value = expect! {
       self,
       false,
-      TokenKind::Fn => { Item::Function(self.parse_function()?) },
-      TokenKind::Enum => { Item::Enum(self.parse_enum()?) },
-      TokenKind::Op => { Item::Operator(self.parse_operator()?) }
-    }
+      TokenKind::Fn = TokenKind::Fn => { Item::Function(self.parse_function()?) },
+      TokenKind::Enum = TokenKind::Enum => { Item::Enum(self.parse_enum()?) },
+      TokenKind::Operator(_) = TokenKind::Operator("".to_string()) => { Item::Operator(self.parse_operator()?) }
+    };
+
+    self.expect(vec![TokenKind::Semicolon])?;
+
+    value
   }
 
   fn parse_function(&mut self) -> Result<Function, Error<ParserError>> {
@@ -374,8 +378,6 @@ impl Parser<'_> {
   }
 
   fn parse_operator(&mut self) -> Result<Operator, Error<ParserError>> {
-    self.expect(vec![TokenKind::Op])?;
-
     let operator = match self.tokens.next() {
       Some((_, TokenKind::Operator(operator))) => operator,
       token => Err(self.unexpected_token(token, vec![TokenKind::Operator("".to_string())]))?,

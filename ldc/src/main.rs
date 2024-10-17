@@ -12,23 +12,23 @@ fn main() {
     Y,
     Z(char, [(i32, xyz): (abc, char)]),
     A(b, c | d | e | f)
-  }
+  };
 
   fn main(): () {
     (x)().y(if a b else if c d else e).z;
     while x y;
     x = y = z;
     [if a b] = c
-  }
+  };
 
-  op -(a: b): c {
+  - (a: b): c {
     d
-  }
+  };
 
-  op +(a: b, c: d): e f['\{41}']
+  + (a: b, c: d): e f['\{41}'];
 
   // very readable
-  fn x(): fn(a, b): c fn(y: a, z: b): c !(a + b * c + d > e -> ~~f + g)
+  fn x(): fn(a, b): c fn(y: a, z: b): c !(a + b * c + d > e -> ~~f + g);
 "#
   .trim();
 

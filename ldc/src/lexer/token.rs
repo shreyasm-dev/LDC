@@ -13,7 +13,6 @@ pub enum TokenKind {
   CharLiteral(char),
 
   Fn,
-  Op,
   Struct,
   Enum,
   Trait,
@@ -102,7 +101,6 @@ impl TokenKind {
   pub fn from_identifier(ident: String) -> Self {
     match ident.as_str() {
       "fn" => TokenKind::Fn,
-      "op" => TokenKind::Op,
       "struct" => TokenKind::Struct,
       "enum" => TokenKind::Enum,
       "trait" => TokenKind::Trait,
@@ -150,7 +148,6 @@ impl std::fmt::Display for TokenKind {
         TokenKind::CharLiteral(_) => "character literal",
 
         TokenKind::Fn => "fn",
-        TokenKind::Op => "op",
         TokenKind::Struct => "struct",
         TokenKind::Enum => "enum",
         TokenKind::Trait => "trait",
