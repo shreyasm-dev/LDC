@@ -4,6 +4,7 @@ pub struct Module {
   pub items: Vec<(bool, Item)>,
 }
 
+// TODO: generics and traits (trait bounds, default implementations, fields?)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Item {
   Function(Function),
@@ -14,54 +15,82 @@ pub enum Item {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Header {
+pub struct FunctionHeader {
   pub name: String,
   pub parameters: Vec<Parameter>,
   pub return_type: Option<Type>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct EnumHeader {
+  pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function {
-  pub header: Header,
+  pub header: FunctionHeader,
   pub body: Expression,
 }
 
-// TODO: precedence and associativity
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Operator {
+pub struct Operator {
+  pub header: OperatorHeader,
+  pub body: Expression,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum OperatorHeader {
   Prefix {
     operator: String,
-    operand: Parameter,
+    operand: Type,
     result: Type,
-    body: Expression,
   },
   Infix {
     operator: String,
-    operands: (Parameter, Parameter),
+    operands: (Type, Type),
     result: Type,
-    body: Expression,
   },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Struct {
+  pub header: StructHeader,
+  // (public, static, item)
+  pub items: Vec<(bool, bool, Item)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StructHeader {
   pub name: String,
-  // (public, field)
-  pub fields: Vec<(bool, Field)>,
-  // (public, method)
-  pub methods: Vec<(bool, Function)>,
+  pub traits: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Enum {
-  pub name: String,
+  pub header: EnumHeader,
   pub variants: Vec<Variant>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Trait {
+  pub header: TraitHeader,
+  // (public, static, header)
+  pub items: Vec<(bool, bool, Header)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TraitHeader {
   pub name: String,
-  pub methods: Vec<Header>,
+  pub traits: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Header {
+  Function(FunctionHeader),
+  Struct(StructHeader),
+  Enum(EnumHeader),
+  Trait(TraitHeader),
+  Operator(OperatorHeader),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

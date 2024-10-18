@@ -17,7 +17,7 @@ fn main() {
   fn main(): () {
     (x)().y(if a b else if c d else e).z;
     while x y;
-    x = y = z;
+    let x = y = z;
     [if a b] = c
   };
 
@@ -29,6 +29,21 @@ fn main() {
 
   // very readable
   fn x(): fn(a, b): c fn(y: a, z: b): c !(a + b * c + d > e -> ~~f + g);
+
+  trait T {
+    pub fn x(a, b);
+    static fn y(c);
+  };
+
+  struct X: T {
+    pub fn x() y;
+    pub static fn y() x;
+    pub static enum Z {
+      A,
+      B,
+      C
+    };
+  };
 "#
   .trim();
 
