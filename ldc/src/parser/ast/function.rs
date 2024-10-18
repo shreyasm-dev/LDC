@@ -9,6 +9,7 @@ pub struct Function {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Header {
   pub name: String,
+  pub type_parameters: Vec<util::TypeParameter>,
   pub parameters: Vec<util::Parameter>,
   pub ty: Option<util::Type>,
 }

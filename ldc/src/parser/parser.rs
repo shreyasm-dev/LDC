@@ -203,6 +203,7 @@ impl Parser<'_> {
     self.expect(vec![TokenKind::Fn])?;
 
     let name = self.expect_identifier()?;
+    let type_parameters = self.parse_type_parameter()?;
 
     self.expect(vec![TokenKind::LeftParen])?;
 
@@ -214,6 +215,7 @@ impl Parser<'_> {
 
     let header = function::Header {
       name,
+      type_parameters,
       parameters,
       ty,
     };
@@ -227,6 +229,7 @@ impl Parser<'_> {
     self.expect(vec![TokenKind::Struct])?;
 
     let name = self.expect_identifier()?;
+    let type_parameters = self.parse_type_parameter()?;
 
     let traits = match self.tokens.peek() {
       Some((_, TokenKind::Operator(operator))) if operator == ":" => {
@@ -236,7 +239,11 @@ impl Parser<'_> {
       _ => Vec::new(),
     };
 
-    let header = r#struct::Header { name, traits };
+    let header = r#struct::Header {
+      name,
+      type_parameters,
+      traits,
+    };
 
     self.expect(vec![TokenKind::LeftBrace])?;
 
@@ -259,7 +266,11 @@ impl Parser<'_> {
     self.expect(vec![TokenKind::Enum])?;
 
     let name = self.expect_identifier()?;
-    let header = r#enum::Header { name };
+    let type_parameters = self.parse_type_parameter()?;
+    let header = r#enum::Header {
+      name,
+      type_parameters,
+    };
 
     self.expect(vec![TokenKind::LeftBrace])?;
 
@@ -290,6 +301,7 @@ impl Parser<'_> {
     self.expect(vec![TokenKind::Trait])?;
 
     let name = self.expect_identifier()?;
+    let type_parameters = self.parse_type_parameter()?;
     let traits = match self.tokens.peek() {
       Some((_, TokenKind::Operator(operator))) if operator == ":" => {
         self.tokens.next();
@@ -298,7 +310,11 @@ impl Parser<'_> {
       _ => Vec::new(),
     };
 
-    let header = r#trait::Header { name, traits };
+    let header = r#trait::Header {
+      name,
+      type_parameters,
+      traits,
+    };
 
     self.expect(vec![TokenKind::LeftBrace])?;
 
@@ -323,6 +339,7 @@ impl Parser<'_> {
       true,
       TokenKind::Fn = TokenKind::Fn => {
         let name = self.expect_identifier()?;
+        let type_parameters = self.parse_type_parameter()?;
 
         self.expect(vec![TokenKind::LeftParen])?;
 
@@ -332,10 +349,11 @@ impl Parser<'_> {
 
         let ty = self.parse_type_annotation(false)?.unwrap();
 
-        r#trait::Item::Function(r#trait::Function { name, parameters, ty })
+        r#trait::Item::Function(r#trait::Function { name, type_parameters, parameters, ty })
       },
       TokenKind::Struct = TokenKind::Struct => {
         let name = self.expect_identifier()?;
+        let type_parameters = self.parse_type_parameter()?;
         let traits = match self.tokens.peek() {
           Some((_, TokenKind::Operator(operator))) if operator == ":" => {
             self.tokens.next();
@@ -344,13 +362,17 @@ impl Parser<'_> {
           _ => Vec::new(),
         };
 
-        r#trait::Item::Struct(r#trait::Struct { name, traits })
+        r#trait::Item::Struct(r#trait::Struct { name, type_parameters, traits })
       },
       TokenKind::Enum = TokenKind::Enum => {
-        r#trait::Item::Enum(r#trait::Enum { name: self.expect_identifier()? })
+        let name = self.expect_identifier()?;
+        let type_parameters = self.parse_type_parameter()?;
+
+        r#trait::Item::Enum(r#trait::Enum { name, type_parameters })
       },
       TokenKind::Trait = TokenKind::Trait => {
         let name = self.expect_identifier()?;
+        let type_parameters = self.parse_type_parameter()?;
         let traits = match self.tokens.peek() {
           Some((_, TokenKind::Operator(operator))) if operator == ":" => {
             self.tokens.next();
@@ -359,7 +381,7 @@ impl Parser<'_> {
           _ => Vec::new(),
         };
 
-        r#trait::Item::Trait(r#trait::Trait_ { name, traits })
+        r#trait::Item::Trait(r#trait::Trait_ { name, type_parameters, traits })
       },
       TokenKind::Operator(_) = TokenKind::Operator("".to_string()) => {
         let operator = match self.tokens.next() {
@@ -367,6 +389,7 @@ impl Parser<'_> {
           token => Err(self.unexpected_token(token, vec![TokenKind::Operator("".to_string())]))?,
         }
         .to_string();
+        let type_parameters = self.parse_type_parameter()?;
 
         self.expect(vec![TokenKind::LeftParen])?;
 
@@ -385,11 +408,13 @@ impl Parser<'_> {
         r#trait::Item::Operator(match b {
           Some(b) => r#trait::Operator::Infix {
             operator,
+            type_parameters,
             operands: (a, b),
             result,
           },
           None => r#trait::Operator::Prefix {
             operator,
+            type_parameters,
             operand: a,
             result,
           },
@@ -402,12 +427,14 @@ impl Parser<'_> {
     Ok(value)
   }
 
+  // TODO: we need to make sure that the types are ultimately concrete
   fn parse_operator(&mut self) -> Result<operator::Operator, Error<ParserError>> {
     let operator = match self.tokens.next() {
       Some((_, TokenKind::Operator(operator))) => operator,
       token => Err(self.unexpected_token(token, vec![TokenKind::Operator("".to_string())]))?,
     }
     .to_string();
+    let type_parameters = self.parse_type_parameter()?;
 
     self.expect(vec![TokenKind::LeftParen])?;
 
@@ -426,11 +453,13 @@ impl Parser<'_> {
     let header = match b {
       Some(b) => operator::Header::Infix {
         operator,
+        type_parameters,
         operands: (a, b),
         result,
       },
       None => operator::Header::Prefix {
         operator,
+        type_parameters,
         operand: a,
         result,
       },
@@ -641,6 +670,34 @@ impl Parser<'_> {
     Ok(expression)
   }
 
+  fn parse_type_parameter(&mut self) -> Result<Vec<util::TypeParameter>, Error<ParserError>> {
+    match self.tokens.peek() {
+      Some((_, TokenKind::Operator(operator))) if operator == "<" => {
+        self.tokens.next();
+        let parameters = self.expect_list(
+          TokenKind::Operator(">".to_string()),
+          TokenKind::Comma,
+          |parser| {
+            let name = parser.expect_identifier()?;
+            match parser.tokens.peek() {
+              Some((_, TokenKind::Operator(operator))) if operator == ":" => {
+                parser.tokens.next();
+                let traits = parser.expect_identifier_list(TokenKind::Comma)?;
+                Ok(util::TypeParameter { name, traits })
+              }
+              _ => Ok(util::TypeParameter {
+                name,
+                traits: Vec::new(),
+              }),
+            }
+          },
+        )?;
+        Ok(parameters)
+      }
+      _ => Ok(Vec::new()),
+    }
+  }
+
   fn parse_type(&mut self) -> Result<util::Type, Error<ParserError>> {
     let expected = vec![
       TokenKind::Identifier("".to_string()),
@@ -664,7 +721,21 @@ impl Parser<'_> {
 
     let ty = match self.tokens.next() {
       Some(token) => Ok(match &token.1 {
-        TokenKind::Identifier(name) => util::Type::Named(name.to_string()),
+        TokenKind::Identifier(name) => util::Type::Named(
+          name.to_string(),
+          match self.tokens.peek() {
+            Some((_, TokenKind::Operator(operator))) if operator == "<" => {
+              self.tokens.next();
+              let parameters = self.expect_list(
+                TokenKind::Operator(">".to_string()),
+                TokenKind::Comma,
+                |parser| parser.parse_type(),
+              )?;
+              parameters
+            }
+            _ => Vec::new(),
+          },
+        ),
 
         TokenKind::Numeric(NumericType::Char) => util::Type::Char,
         TokenKind::Numeric(NumericType::I8) => util::Type::I8,

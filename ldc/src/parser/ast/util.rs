@@ -36,7 +36,7 @@ pub enum Type {
   F32,
   F64,
   Char,
-  Named(String),
+  Named(String, Vec<Type>),
   Function(Vec<Type>, Box<Type>),
   Tuple(Vec<Type>),
   Array(Box<Type>),
@@ -82,7 +82,6 @@ pub enum Expression {
   Identifier(String),
 }
 
-// TODO: int, float
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
   Char(char),
@@ -178,4 +177,10 @@ impl NumberLiteral {
       }?),
     })
   }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct TypeParameter {
+  pub name: String,
+  pub traits: Vec<String>,
 }

@@ -21,7 +21,7 @@ fn main() {
     [if a b] = c
   };
 
-  - (a: b): c {
+  - <T>(a: B<T>): C<i32> {
     d
   };
 
@@ -44,7 +44,7 @@ fn main() {
       C
     };
 
-    pub fn z() 65c.0c;
+    pub fn z<U: T>() 65c.0c;
   };
 "#
   .trim();
