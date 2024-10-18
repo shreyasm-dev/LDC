@@ -31,8 +31,8 @@ fn main() {
   fn x(): fn(a, b): c fn(y: a, z: b): c !(a + b * c + d > e -> ~~f + g);
 
   trait T {
-    pub fn x(a, b);
-    static fn y(c);
+    pub fn x(a, b): c;
+    static fn y(c): ();
   };
 
   struct X: T {

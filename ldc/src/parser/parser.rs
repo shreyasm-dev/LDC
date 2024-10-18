@@ -1,7 +1,4 @@
-use super::ast::{
-  Enum, EnumHeader, Expression, Function, FunctionHeader, Header, Item, Literal, Module, Operator,
-  OperatorHeader, Parameter, Struct, StructHeader, Trait, TraitHeader, Type, Variant,
-};
+use super::ast::*;
 use crate::{
   error::{Error, ParserError},
   lexer::token::{Token, TokenKind},
@@ -153,125 +150,80 @@ impl Parser<'_> {
     Ok(items)
   }
 
-  pub fn parse(&mut self) -> Result<Module, Error<ParserError>> {
+  pub fn parse(&mut self) -> Result<module::Module, Error<ParserError>> {
     let mut items = Vec::new();
 
     loop {
       match self.tokens.peek() {
         None | Some((_, TokenKind::Eof)) => break,
-        _ => match self.parse_item(false)? {
-          (public, _, item) => items.push((public, item)),
-        },
+        _ => items.push((self.parse_modifiers(false), self.parse_item()?)),
       }
     }
 
-    Ok(Module { items })
+    Ok(module::Module { items })
   }
 
-  fn parse_item(&mut self, allow_static: bool) -> Result<(bool, bool, Item), Error<ParserError>> {
-    let public = match self.tokens.peek() {
-      Some((_, TokenKind::Pub)) => {
-        self.tokens.next();
-        true
-      }
-      _ => false,
-    };
-
-    let static_ = if allow_static {
-      match self.tokens.peek() {
-        Some((_, TokenKind::Static)) => {
-          self.tokens.next();
-          true
-        }
-        _ => false,
-      }
-    } else {
-      false
-    };
-
-    let value = expect! {
-      self,
-      false,
-      TokenKind::Fn = TokenKind::Fn => { Item::Function(self.parse_function()?) },
-      TokenKind::Struct = TokenKind::Struct => { Item::Struct(self.parse_struct()?) },
-      TokenKind::Enum = TokenKind::Enum => { Item::Enum(self.parse_enum()?) },
-      TokenKind::Trait = TokenKind::Trait => { Item::Trait(self.parse_trait()?) },
-      TokenKind::Operator(_) = TokenKind::Operator("".to_string()) => { Item::Operator(self.parse_operator()?) }
-    }?;
-
-    self.expect(vec![TokenKind::Semicolon])?;
-
-    Ok((public, static_, value))
-  }
-
-  fn parse_header(
-    &mut self,
-    allow_static: bool,
-    named: bool,
-  ) -> Result<(bool, bool, Header), Error<ParserError>> {
-    let public = match self.tokens.peek() {
-      Some((_, TokenKind::Pub)) => {
-        self.tokens.next();
-        true
-      }
-      _ => false,
-    };
-
-    let static_ = if allow_static {
-      match self.tokens.peek() {
-        Some((_, TokenKind::Static)) => {
-          self.tokens.next();
-          true
-        }
-        _ => false,
-      }
-    } else {
-      false
-    };
-
-    let value = expect! {
-      self,
-      false,
-      TokenKind::Fn = TokenKind::Fn => { Header::Function(self.parse_function_header(named)?) },
-      TokenKind::Struct = TokenKind::Struct => { Header::Struct(self.parse_struct_header()?) },
-      TokenKind::Enum = TokenKind::Enum => { Header::Enum(self.parse_enum_header()?) },
-      TokenKind::Trait = TokenKind::Trait => { Header::Trait(self.parse_trait_header()?) },
-      TokenKind::Operator(_) = TokenKind::Operator("".to_string()) => { Header::Operator(self.parse_operator_header(named)?) }
-    }?;
-
-    self.expect(vec![TokenKind::Semicolon])?;
-
-    Ok((public, static_, value))
-  }
-
-  fn parse_function(&mut self) -> Result<Function, Error<ParserError>> {
-    let header = self.parse_function_header(true)?;
-    let body = self.parse_expression()?;
-
-    Ok(Function { header, body })
-  }
-
-  fn parse_struct(&mut self) -> Result<Struct, Error<ParserError>> {
-    let header = self.parse_struct_header()?;
-
-    self.expect(vec![TokenKind::LeftBrace])?;
-
-    let mut items = Vec::new();
+  pub fn parse_modifiers(&mut self, allow_static: bool) -> util::Modifiers {
+    let mut modifiers = util::Modifiers::default();
 
     loop {
       match self.tokens.peek() {
-        Some((_, TokenKind::RightBrace)) => {
+        Some((_, TokenKind::Pub)) => {
           self.tokens.next();
-          break;
+          modifiers.public = true;
         }
-        _ => items.push(self.parse_item(true)?),
+        Some((_, TokenKind::Static)) if allow_static => {
+          self.tokens.next();
+          modifiers.static_ = true;
+        }
+        _ => break,
       }
     }
 
-    Ok(Struct { header, items })
+    modifiers
   }
 
-  fn parse_struct_header(&mut self) -> Result<StructHeader, Error<ParserError>> {
+  fn parse_item(&mut self) -> Result<module::Item, Error<ParserError>> {
+    let value = expect! {
+      self,
+      false,
+      TokenKind::Fn = TokenKind::Fn => { module::Item::Function(self.parse_function()?) },
+      TokenKind::Struct = TokenKind::Struct => { module::Item::Struct(self.parse_struct()?) },
+      TokenKind::Enum = TokenKind::Enum => { module::Item::Enum(self.parse_enum()?) },
+      TokenKind::Trait = TokenKind::Trait => { module::Item::Trait(self.parse_trait()?) },
+      TokenKind::Operator(_) = TokenKind::Operator("".to_string()) => { module::Item::Operator(self.parse_operator()?) }
+    }?;
+
+    self.expect(vec![TokenKind::Semicolon])?;
+
+    Ok(value)
+  }
+
+  fn parse_function(&mut self) -> Result<function::Function, Error<ParserError>> {
+    self.expect(vec![TokenKind::Fn])?;
+
+    let name = self.expect_identifier()?;
+
+    self.expect(vec![TokenKind::LeftParen])?;
+
+    let parameters = self.expect_list(TokenKind::RightParen, TokenKind::Comma, |parser| {
+      parser.parse_parameter()
+    })?;
+
+    let ty = self.parse_type_annotation(true)?;
+
+    let header = function::Header {
+      name,
+      parameters,
+      ty,
+    };
+
+    let body = self.parse_expression()?;
+
+    Ok(function::Function { header, body })
+  }
+
+  fn parse_struct(&mut self) -> Result<r#struct::Struct, Error<ParserError>> {
     self.expect(vec![TokenKind::Struct])?;
 
     let name = self.expect_identifier()?;
@@ -284,68 +236,244 @@ impl Parser<'_> {
       _ => Vec::new(),
     };
 
-    Ok(StructHeader { name, traits })
+    let header = r#struct::Header { name, traits };
+
+    self.expect(vec![TokenKind::LeftBrace])?;
+
+    let mut items = Vec::new();
+
+    loop {
+      match self.tokens.peek() {
+        Some((_, TokenKind::RightBrace)) => {
+          self.tokens.next();
+          break;
+        }
+        _ => items.push((self.parse_modifiers(true), self.parse_item()?)),
+      }
+    }
+
+    Ok(r#struct::Struct { header, items })
   }
 
-  fn parse_function_header(&mut self, named: bool) -> Result<FunctionHeader, Error<ParserError>> {
-    self.expect(vec![TokenKind::Fn])?;
+  fn parse_enum(&mut self) -> Result<r#enum::Enum, Error<ParserError>> {
+    self.expect(vec![TokenKind::Enum])?;
 
     let name = self.expect_identifier()?;
+    let header = r#enum::Header { name };
+
+    self.expect(vec![TokenKind::LeftBrace])?;
+
+    let variants = self.expect_list(TokenKind::RightBrace, TokenKind::Comma, |parser| {
+      parser.parse_enum_variant()
+    })?;
+
+    Ok(r#enum::Enum { header, variants })
+  }
+
+  fn parse_enum_variant(&mut self) -> Result<r#enum::Variant, Error<ParserError>> {
+    let name = self.expect_identifier()?;
+
+    let fields = match self.tokens.peek() {
+      Some((_, TokenKind::LeftParen)) => {
+        self.tokens.next();
+        self.expect_list(TokenKind::RightParen, TokenKind::Comma, |parser| {
+          parser.parse_type()
+        })?
+      }
+      _ => Vec::new(),
+    };
+
+    Ok(r#enum::Variant { name, fields })
+  }
+
+  fn parse_trait(&mut self) -> Result<r#trait::Trait, Error<ParserError>> {
+    self.expect(vec![TokenKind::Trait])?;
+
+    let name = self.expect_identifier()?;
+    let traits = match self.tokens.peek() {
+      Some((_, TokenKind::Operator(operator))) if operator == ":" => {
+        self.tokens.next();
+        self.expect_identifier_list(TokenKind::Comma)?
+      }
+      _ => Vec::new(),
+    };
+
+    let header = r#trait::Header { name, traits };
+
+    self.expect(vec![TokenKind::LeftBrace])?;
+
+    let mut items = Vec::new();
+
+    loop {
+      match self.tokens.peek() {
+        Some((_, TokenKind::RightBrace)) => {
+          self.tokens.next();
+          break;
+        }
+        _ => items.push((self.parse_modifiers(true), self.parse_trait_item()?)),
+      }
+    }
+
+    Ok(r#trait::Trait { header, items })
+  }
+
+  fn parse_trait_item(&mut self) -> Result<r#trait::Item, Error<ParserError>> {
+    let value = expect! {
+      self,
+      true,
+      TokenKind::Fn = TokenKind::Fn => {
+        let name = self.expect_identifier()?;
+
+        self.expect(vec![TokenKind::LeftParen])?;
+
+        let parameters = self.expect_list(TokenKind::RightParen, TokenKind::Comma, |parser| {
+          parser.parse_type()
+        })?;
+
+        let ty = self.parse_type_annotation(false)?.unwrap();
+
+        r#trait::Item::Function(r#trait::Function { name, parameters, ty })
+      },
+      TokenKind::Struct = TokenKind::Struct => {
+        let name = self.expect_identifier()?;
+        let traits = match self.tokens.peek() {
+          Some((_, TokenKind::Operator(operator))) if operator == ":" => {
+            self.tokens.next();
+            self.expect_identifier_list(TokenKind::Comma)?
+          }
+          _ => Vec::new(),
+        };
+
+        r#trait::Item::Struct(r#trait::Struct { name, traits })
+      },
+      TokenKind::Enum = TokenKind::Enum => {
+        r#trait::Item::Enum(r#trait::Enum { name: self.expect_identifier()? })
+      },
+      TokenKind::Trait = TokenKind::Trait => {
+        let name = self.expect_identifier()?;
+        let traits = match self.tokens.peek() {
+          Some((_, TokenKind::Operator(operator))) if operator == ":" => {
+            self.tokens.next();
+            self.expect_identifier_list(TokenKind::Comma)?
+          }
+          _ => Vec::new(),
+        };
+
+        r#trait::Item::Trait(r#trait::Trait_ { name, traits })
+      },
+      TokenKind::Operator(_) = TokenKind::Operator("".to_string()) => {
+        let operator = match self.tokens.next() {
+          Some((_, TokenKind::Operator(operator))) => operator,
+          token => Err(self.unexpected_token(token, vec![TokenKind::Operator("".to_string())]))?,
+        }
+        .to_string();
+
+        self.expect(vec![TokenKind::LeftParen])?;
+
+        let a = self.parse_type()?;
+        let b = match self.tokens.peek() {
+          Some((_, TokenKind::Comma)) => {
+            self.tokens.next();
+            Some(self.parse_type()?)
+          }
+          _ => None,
+        };
+
+        self.expect(vec![TokenKind::RightParen])?;
+
+        let result = self.parse_type_annotation(false)?.unwrap();
+        r#trait::Item::Operator(match b {
+          Some(b) => r#trait::Operator::Infix {
+            operator,
+            operands: (a, b),
+            result,
+          },
+          None => r#trait::Operator::Prefix {
+            operator,
+            operand: a,
+            result,
+          },
+        })
+      }
+    }?;
+
+    self.expect(vec![TokenKind::Semicolon])?;
+
+    Ok(value)
+  }
+
+  fn parse_operator(&mut self) -> Result<operator::Operator, Error<ParserError>> {
+    let operator = match self.tokens.next() {
+      Some((_, TokenKind::Operator(operator))) => operator,
+      token => Err(self.unexpected_token(token, vec![TokenKind::Operator("".to_string())]))?,
+    }
+    .to_string();
 
     self.expect(vec![TokenKind::LeftParen])?;
 
-    let parameters = self.expect_list(TokenKind::RightParen, TokenKind::Comma, |parser| {
-      if named {
-        parser.parse_parameter()
-      } else {
-        Ok(Parameter {
-          name: "".to_string(),
-          ty: parser.parse_type()?,
-        })
+    let a = self.parse_parameter()?;
+    let b = match self.tokens.peek() {
+      Some((_, TokenKind::Comma)) => {
+        self.tokens.next();
+        Some(self.parse_parameter()?)
       }
-    })?;
+      _ => None,
+    };
 
-    let return_type = self.parse_type_annotation(true)?;
+    self.expect(vec![TokenKind::RightParen])?;
 
-    Ok(FunctionHeader {
-      name,
-      parameters,
-      return_type,
-    })
+    let result = self.parse_type_annotation(false)?.unwrap();
+    let header = match b {
+      Some(b) => operator::Header::Infix {
+        operator,
+        operands: (a, b),
+        result,
+      },
+      None => operator::Header::Prefix {
+        operator,
+        operand: a,
+        result,
+      },
+    };
+
+    let body = self.parse_expression()?;
+
+    Ok(operator::Operator { header, body })
   }
 
-  fn parse_parameter(&mut self) -> Result<Parameter, Error<ParserError>> {
+  fn parse_parameter(&mut self) -> Result<util::Parameter, Error<ParserError>> {
     let name = self.expect_identifier()?;
 
     self.expect_operator(vec![":"])?;
 
     let ty = self.parse_type()?;
 
-    Ok(Parameter { name, ty })
+    Ok(util::Parameter { name, ty })
   }
 
-  fn parse_expression(&mut self) -> Result<Expression, Error<ParserError>> {
+  fn parse_expression(&mut self) -> Result<util::Expression, Error<ParserError>> {
     self.parse_expression_with_precedence(0)
   }
 
   fn parse_expression_with_precedence(
     &mut self,
     precedence: u8,
-  ) -> Result<Expression, Error<ParserError>> {
+  ) -> Result<util::Expression, Error<ParserError>> {
     let mut expression = match self.tokens.next() {
       Some((_, TokenKind::Operator(operator))) => {
-        let op = TokenKind::Operator(operator.to_string());
-        Ok(Expression::Prefix(
-          operator.to_string(),
-          Box::new(self.parse_expression_with_precedence(op.prefix_precedence())?),
-        ))
+        let operator = operator.to_string();
+        let op = TokenKind::Operator(operator.clone());
+        Ok(util::Expression::Prefix {
+          operator,
+          operand: Box::new(self.parse_expression_with_precedence(op.prefix_precedence())?),
+        })
       }
-      Some((_, TokenKind::Identifier(name))) => Ok(Expression::Identifier(name.clone())),
-      Some((_, TokenKind::Let)) => Ok(Expression::Declaration(self.expect_identifier()?)),
+      Some((_, TokenKind::Identifier(name))) => Ok(util::Expression::Identifier(name.clone())),
+      Some((_, TokenKind::Let)) => Ok(util::Expression::Declaration(self.expect_identifier()?)),
       Some((_, TokenKind::If)) => {
         let condition = Box::new(self.parse_expression()?);
-        let then = Box::new(self.parse_expression()?);
-        let otherwise = match self.tokens.peek() {
+        let consequence = Box::new(self.parse_expression()?);
+        let alternative = match self.tokens.peek() {
           Some((_, TokenKind::Else)) => {
             self.tokens.next();
             Some(Box::new(self.parse_expression()?))
@@ -353,18 +481,24 @@ impl Parser<'_> {
           _ => None,
         };
 
-        Ok(Expression::If(condition, then, otherwise))
+        Ok(util::Expression::If {
+          condition,
+          consequence,
+          alternative,
+        })
       }
       Some((_, TokenKind::While)) => {
         let condition = Box::new(self.parse_expression()?);
         let body = Box::new(self.parse_expression()?);
 
-        Ok(Expression::While(condition, body))
+        Ok(util::Expression::While { condition, body })
       }
-      Some((_, TokenKind::Return)) => Ok(Expression::Return(Box::new(self.parse_expression()?))),
+      Some((_, TokenKind::Return)) => {
+        Ok(util::Expression::Return(Box::new(self.parse_expression()?)))
+      }
       Some((_, TokenKind::LeftBrace)) => {
         let mut ended = false;
-        let mut value = false;
+        let mut has_value = false;
         let mut expressions = Vec::new();
 
         loop {
@@ -380,13 +514,13 @@ impl Parser<'_> {
                 )?;
               }
 
-              value = true;
+              has_value = true;
               expressions.push(self.parse_expression()?);
 
               match self.tokens.peek().copied() {
                 Some((_, TokenKind::Semicolon)) => {
                   self.tokens.next();
-                  value = false;
+                  has_value = false;
                 }
                 _ => {
                   ended = true;
@@ -396,14 +530,17 @@ impl Parser<'_> {
           }
         }
 
-        Ok(Expression::Block(expressions, value))
+        Ok(util::Expression::Block {
+          expressions,
+          has_value,
+        })
       }
-      Some((_, TokenKind::StringLiteral(value))) => {
-        Ok(Expression::Literal(Literal::String(value.clone())))
-      }
-      Some((_, TokenKind::CharLiteral(value))) => {
-        Ok(Expression::Literal(Literal::Char(value.clone())))
-      }
+      Some((_, TokenKind::StringLiteral(value))) => Ok(util::Expression::Literal(
+        util::Literal::String(value.clone()),
+      )),
+      Some((_, TokenKind::CharLiteral(value))) => Ok(util::Expression::Literal(
+        util::Literal::Char(value.clone()),
+      )),
       Some((_, TokenKind::Fn)) => {
         self.expect(vec![TokenKind::LeftParen])?;
 
@@ -411,21 +548,21 @@ impl Parser<'_> {
           parser.parse_parameter()
         })?;
 
-        let return_type = self.parse_type_annotation(true)?;
+        let ty = self.parse_type_annotation(true)?;
         let body = self.parse_expression()?;
 
-        Ok(Expression::Literal(Literal::Closure(
+        Ok(util::Expression::Literal(util::Literal::Closure {
           parameters,
-          return_type,
-          Box::new(body),
-        )))
+          ty,
+          body: Box::new(body),
+        }))
       }
-      Some((_, TokenKind::LeftParen)) => Ok(Expression::Literal(Literal::Tuple(
+      Some((_, TokenKind::LeftParen)) => Ok(util::Expression::Literal(util::Literal::Tuple(
         self.expect_list(TokenKind::RightParen, TokenKind::Comma, |parser| {
           parser.parse_expression()
         })?,
       ))),
-      Some((_, TokenKind::LeftBracket)) => Ok(Expression::Literal(Literal::Array(
+      Some((_, TokenKind::LeftBracket)) => Ok(util::Expression::Literal(util::Literal::Array(
         self.expect_list(TokenKind::RightBracket, TokenKind::Comma, |parser| {
           parser.parse_expression()
         })?,
@@ -452,31 +589,36 @@ impl Parser<'_> {
         // calling and indexing have the highest precedence
         Some((_, TokenKind::LeftParen)) => {
           self.tokens.next();
-          expression = Expression::Call(
-            Box::new(expression),
-            self.expect_list(TokenKind::RightParen, TokenKind::Comma, |parser| {
+          expression = util::Expression::Call {
+            expression: Box::new(expression),
+            arguments: self.expect_list(TokenKind::RightParen, TokenKind::Comma, |parser| {
               parser.parse_expression()
             })?,
-          )
+          };
         }
         Some((_, TokenKind::LeftBracket)) => {
           self.tokens.next();
-          expression = Expression::Index(Box::new(expression), Box::new(self.parse_expression()?));
+          expression = util::Expression::Index {
+            expression: Box::new(expression),
+            index: Box::new(self.parse_expression()?),
+          };
           self.expect(vec![TokenKind::RightBracket])?;
         }
         Some((_, TokenKind::Operator(operator))) => {
           // https://news.ycombinator.com/item?id=13915458
-          // TODO: x == y == z etc
+          // TODO: conditional chaining (x == y == z etc.)
           let op = TokenKind::Operator(operator.to_string());
           expression = if op.infix_precedence() >= precedence {
             self.tokens.next();
-            Expression::Infix(
-              Box::new(expression),
-              operator.to_string(),
-              Box::new(self.parse_expression_with_precedence(
-                op.infix_precedence() + if op.left_associative() { 1 } else { 0 },
-              )?),
-            )
+            util::Expression::Infix {
+              operator: operator.to_string(),
+              operands: (
+                Box::new(expression),
+                Box::new(self.parse_expression_with_precedence(
+                  op.infix_precedence() + if op.left_associative() { 1 } else { 0 },
+                )?),
+              ),
+            }
           } else {
             break;
           }
@@ -488,136 +630,7 @@ impl Parser<'_> {
     Ok(expression)
   }
 
-  fn parse_enum(&mut self) -> Result<Enum, Error<ParserError>> {
-    let header = self.parse_enum_header()?;
-
-    self.expect(vec![TokenKind::LeftBrace])?;
-
-    let variants = self.expect_list(TokenKind::RightBrace, TokenKind::Comma, |parser| {
-      parser.parse_variant()
-    })?;
-
-    Ok(Enum { header, variants })
-  }
-
-  fn parse_enum_header(&mut self) -> Result<EnumHeader, Error<ParserError>> {
-    self.expect(vec![TokenKind::Enum])?;
-
-    let name = self.expect_identifier()?;
-
-    Ok(EnumHeader { name })
-  }
-
-  fn parse_trait(&mut self) -> Result<Trait, Error<ParserError>> {
-    let header = self.parse_trait_header()?;
-
-    self.expect(vec![TokenKind::LeftBrace])?;
-
-    let mut items = Vec::new();
-
-    loop {
-      match self.tokens.peek() {
-        Some((_, TokenKind::RightBrace)) => {
-          self.tokens.next();
-          break;
-        }
-        _ => items.push(self.parse_header(true, false)?),
-      }
-    }
-
-    Ok(Trait { header, items })
-  }
-
-  fn parse_trait_header(&mut self) -> Result<TraitHeader, Error<ParserError>> {
-    self.expect(vec![TokenKind::Trait])?;
-
-    let name = self.expect_identifier()?;
-
-    let traits = match self.tokens.peek() {
-      Some((_, TokenKind::Operator(operator))) if operator == ":" => {
-        self.tokens.next();
-        self.expect_identifier_list(TokenKind::Comma)?
-      }
-      _ => Vec::new(),
-    };
-
-    Ok(TraitHeader { name, traits })
-  }
-
-  fn parse_operator(&mut self) -> Result<Operator, Error<ParserError>> {
-    let header = self.parse_operator_header(true)?;
-    let body = self.parse_expression()?;
-
-    Ok(Operator { header, body })
-  }
-
-  fn parse_operator_header(&mut self, named: bool) -> Result<OperatorHeader, Error<ParserError>> {
-    let operator = match self.tokens.next() {
-      Some((_, TokenKind::Operator(operator))) => operator,
-      token => Err(self.unexpected_token(token, vec![TokenKind::Operator("".to_string())]))?,
-    }
-    .to_string();
-
-    self.expect(vec![TokenKind::LeftParen])?;
-
-    let a = if named {
-      self.parse_parameter()?
-    } else {
-      Parameter {
-        name: "".to_string(),
-        ty: self.parse_type()?,
-      }
-    };
-    let b = match self.tokens.peek() {
-      Some((_, TokenKind::Comma)) => {
-        self.tokens.next();
-        Some(if named {
-          self.parse_parameter()?
-        } else {
-          Parameter {
-            name: "".to_string(),
-            ty: self.parse_type()?,
-          }
-        })
-      }
-      _ => None,
-    };
-
-    self.expect(vec![TokenKind::RightParen])?;
-
-    let result = self.parse_type_annotation(false)?.unwrap();
-
-    Ok(match b {
-      Some(b) => OperatorHeader::Infix {
-        operator,
-        operands: (a.ty, b.ty),
-        result,
-      },
-      None => OperatorHeader::Prefix {
-        operator,
-        operand: a.ty,
-        result,
-      },
-    })
-  }
-
-  fn parse_variant(&mut self) -> Result<Variant, Error<ParserError>> {
-    let name = self.expect_identifier()?;
-
-    let fields = match self.tokens.peek() {
-      Some((_, TokenKind::LeftParen)) => {
-        self.tokens.next();
-        self.expect_list(TokenKind::RightParen, TokenKind::Comma, |parser| {
-          parser.parse_type()
-        })?
-      }
-      _ => Vec::new(),
-    };
-
-    Ok(Variant { name, fields })
-  }
-
-  fn parse_type(&mut self) -> Result<Type, Error<ParserError>> {
+  fn parse_type(&mut self) -> Result<util::Type, Error<ParserError>> {
     let expected = vec![
       TokenKind::Identifier("".to_string()),
       TokenKind::Char,
@@ -641,23 +654,23 @@ impl Parser<'_> {
 
     let ty = match self.tokens.next() {
       Some(token) => Ok(match &token.1 {
-        TokenKind::Identifier(name) => Type::Named(name.to_string()),
+        TokenKind::Identifier(name) => util::Type::Named(name.to_string()),
 
-        TokenKind::Char => Type::Char,
-        TokenKind::I8 => Type::I8,
-        TokenKind::I16 => Type::I16,
-        TokenKind::I32 => Type::I32,
-        TokenKind::I64 => Type::I64,
-        TokenKind::I128 => Type::I128,
-        TokenKind::U8 => Type::U8,
-        TokenKind::U16 => Type::U16,
-        TokenKind::U32 => Type::U32,
-        TokenKind::U64 => Type::U64,
-        TokenKind::U128 => Type::U128,
-        TokenKind::F16 => Type::F16,
-        TokenKind::F32 => Type::F32,
-        TokenKind::F64 => Type::F64,
-        TokenKind::F128 => Type::F128,
+        TokenKind::Char => util::Type::Char,
+        TokenKind::I8 => util::Type::I8,
+        TokenKind::I16 => util::Type::I16,
+        TokenKind::I32 => util::Type::I32,
+        TokenKind::I64 => util::Type::I64,
+        TokenKind::I128 => util::Type::I128,
+        TokenKind::U8 => util::Type::U8,
+        TokenKind::U16 => util::Type::U16,
+        TokenKind::U32 => util::Type::U32,
+        TokenKind::U64 => util::Type::U64,
+        TokenKind::U128 => util::Type::U128,
+        TokenKind::F16 => util::Type::F16,
+        TokenKind::F32 => util::Type::F32,
+        TokenKind::F64 => util::Type::F64,
+        TokenKind::F128 => util::Type::F128,
         TokenKind::LeftParen => {
           let list = self.expect_list(TokenKind::RightParen, TokenKind::Comma, |parser| {
             parser.parse_type()
@@ -668,18 +681,18 @@ impl Parser<'_> {
             Some((_, TokenKind::Operator(operator))) => match operator.as_str() {
               ":" => {
                 self.tokens.next();
-                Type::Function(list, Box::new(self.parse_type()?))
+                util::Type::Function(list, Box::new(self.parse_type()?))
               }
-              _ => Type::Tuple(list),
+              _ => util::Type::Tuple(list),
             },
 
-            _ => Type::Tuple(list),
+            _ => util::Type::Tuple(list),
           }
         }
         TokenKind::LeftBracket => {
           let ty = Box::new(self.parse_type()?);
           self.expect(vec![TokenKind::RightBracket])?;
-          Type::Array(ty)
+          util::Type::Array(ty)
         }
         TokenKind::Fn => {
           self.expect(vec![TokenKind::LeftParen])?;
@@ -689,7 +702,7 @@ impl Parser<'_> {
           })?;
           let return_type = self.parse_type_annotation(false)?.unwrap();
 
-          Type::Function(parameters, Box::new(return_type))
+          util::Type::Function(parameters, Box::new(return_type))
         }
         _ => Err(self.unexpected_token(Some(token), expected))?,
       }),
@@ -700,7 +713,10 @@ impl Parser<'_> {
       match operator.as_str() {
         "|" => {
           self.tokens.next();
-          Ok(Type::Union(Box::new(ty?), Box::new(self.parse_type()?)))
+          Ok(util::Type::Union(
+            Box::new(ty?),
+            Box::new(self.parse_type()?),
+          ))
         }
         _ => ty,
       }
@@ -709,7 +725,10 @@ impl Parser<'_> {
     }
   }
 
-  fn parse_type_annotation(&mut self, optional: bool) -> Result<Option<Type>, Error<ParserError>> {
+  fn parse_type_annotation(
+    &mut self,
+    optional: bool,
+  ) -> Result<Option<util::Type>, Error<ParserError>> {
     match self.tokens.peek().copied() {
       Some((_, TokenKind::Operator(operator))) if operator == ":" => {
         self.tokens.next();
