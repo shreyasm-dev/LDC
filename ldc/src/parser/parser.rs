@@ -1,7 +1,7 @@
 use super::ast::*;
 use crate::{
   error::{Error, ParserError},
-  lexer::token::{Token, TokenKind},
+  lexer::token::{NumericType, Token, TokenKind},
 };
 use std::{iter::Peekable, slice::Iter};
 
@@ -541,6 +541,17 @@ impl Parser<'_> {
       Some((_, TokenKind::CharLiteral(value))) => Ok(util::Expression::Literal(
         util::Literal::Char(value.clone()),
       )),
+      Some((span, TokenKind::NumberLiteral(value, ty))) => Ok(util::Expression::Literal(
+        util::NumberLiteral::from_string(value, ty.clone()).map_err(|e| {
+          self.error(
+            Some(&(
+              span.clone(),
+              TokenKind::NumberLiteral(value.clone(), ty.clone()),
+            )),
+            e,
+          )
+        })?,
+      )),
       Some((_, TokenKind::Fn)) => {
         self.expect(vec![TokenKind::LeftParen])?;
 
@@ -633,44 +644,41 @@ impl Parser<'_> {
   fn parse_type(&mut self) -> Result<util::Type, Error<ParserError>> {
     let expected = vec![
       TokenKind::Identifier("".to_string()),
-      TokenKind::Char,
-      TokenKind::I8,
-      TokenKind::I16,
-      TokenKind::I32,
-      TokenKind::I64,
-      TokenKind::I128,
-      TokenKind::U8,
-      TokenKind::U16,
-      TokenKind::U32,
-      TokenKind::U64,
-      TokenKind::U128,
-      TokenKind::F16,
-      TokenKind::F32,
-      TokenKind::F64,
-      TokenKind::F128,
+      TokenKind::Numeric(NumericType::Char),
+      TokenKind::Numeric(NumericType::I8),
+      TokenKind::Numeric(NumericType::I16),
+      TokenKind::Numeric(NumericType::I32),
+      TokenKind::Numeric(NumericType::I64),
+      TokenKind::Numeric(NumericType::I128),
+      TokenKind::Numeric(NumericType::U8),
+      TokenKind::Numeric(NumericType::U16),
+      TokenKind::Numeric(NumericType::U32),
+      TokenKind::Numeric(NumericType::U64),
+      TokenKind::Numeric(NumericType::U128),
+      TokenKind::Numeric(NumericType::F32),
+      TokenKind::Numeric(NumericType::F64),
       TokenKind::LeftParen,
       TokenKind::LeftBracket,
+      TokenKind::Fn,
     ];
 
     let ty = match self.tokens.next() {
       Some(token) => Ok(match &token.1 {
         TokenKind::Identifier(name) => util::Type::Named(name.to_string()),
 
-        TokenKind::Char => util::Type::Char,
-        TokenKind::I8 => util::Type::I8,
-        TokenKind::I16 => util::Type::I16,
-        TokenKind::I32 => util::Type::I32,
-        TokenKind::I64 => util::Type::I64,
-        TokenKind::I128 => util::Type::I128,
-        TokenKind::U8 => util::Type::U8,
-        TokenKind::U16 => util::Type::U16,
-        TokenKind::U32 => util::Type::U32,
-        TokenKind::U64 => util::Type::U64,
-        TokenKind::U128 => util::Type::U128,
-        TokenKind::F16 => util::Type::F16,
-        TokenKind::F32 => util::Type::F32,
-        TokenKind::F64 => util::Type::F64,
-        TokenKind::F128 => util::Type::F128,
+        TokenKind::Numeric(NumericType::Char) => util::Type::Char,
+        TokenKind::Numeric(NumericType::I8) => util::Type::I8,
+        TokenKind::Numeric(NumericType::I16) => util::Type::I16,
+        TokenKind::Numeric(NumericType::I32) => util::Type::I32,
+        TokenKind::Numeric(NumericType::I64) => util::Type::I64,
+        TokenKind::Numeric(NumericType::I128) => util::Type::I128,
+        TokenKind::Numeric(NumericType::U8) => util::Type::U8,
+        TokenKind::Numeric(NumericType::U16) => util::Type::U16,
+        TokenKind::Numeric(NumericType::U32) => util::Type::U32,
+        TokenKind::Numeric(NumericType::U64) => util::Type::U64,
+        TokenKind::Numeric(NumericType::U128) => util::Type::U128,
+        TokenKind::Numeric(NumericType::F32) => util::Type::F32,
+        TokenKind::Numeric(NumericType::F64) => util::Type::F64,
         TokenKind::LeftParen => {
           let list = self.expect_list(TokenKind::RightParen, TokenKind::Comma, |parser| {
             parser.parse_type()

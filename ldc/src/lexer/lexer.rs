@@ -1,4 +1,4 @@
-use super::token::{Token, TokenKind};
+use super::token::{NumericType, Token, TokenKind};
 use crate::error::{Error, LexerError};
 use std::{
   iter::Peekable,
@@ -103,15 +103,15 @@ impl<'a> Lexer<'a> {
     (self.end - 1)..self.end
   }
 
-  pub fn match_until<F>(&mut self, c: char, f: F) -> String
+  pub fn match_until<F>(&mut self, c: char, mut f: F) -> Result<String, Error<LexerError>>
   where
-    F: Fn(char) -> Option<String>,
+    F: FnMut(char, &mut Lexer) -> Result<Option<String>, Error<LexerError>>,
   {
     let mut result = String::new();
     result.push(c);
 
     while let Some(&c) = self.input.peek() {
-      match f(c) {
+      match f(c, self)? {
         Some(s) => {
           result.push_str(&s);
           self.advance();
@@ -120,24 +120,28 @@ impl<'a> Lexer<'a> {
       }
     }
 
-    result
+    Ok(result)
   }
 
   pub fn next(&mut self) -> Result<Token, Error<LexerError>> {
     let result = match self.advance() {
       Some(c) => match c {
-        ' ' | '\n' | '\r' | '\t' => Ok(TokenKind::Whitespace(self.match_until(c, |c| match c {
-          ' ' | '\n' | '\r' | '\t' => Some(c.to_string()),
-          _ => None,
-        }))),
+        ' ' | '\n' | '\r' | '\t' => Ok(TokenKind::Whitespace(self.match_until(c, |c, _| {
+          Ok(match c {
+            ' ' | '\n' | '\r' | '\t' => Some(c.to_string()),
+            _ => None,
+          })
+        })?)),
 
         'a'..='z' | 'A'..='Z' | '_' => Ok(TokenKind::from_identifier(self.match_until(
           c,
-          |c| match c {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => Some(c.to_string()),
-            _ => None,
+          |c, _| {
+            Ok(match c {
+              'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => Some(c.to_string()),
+              _ => None,
+            })
           },
-        ))),
+        )?)),
 
         '"' => {
           let mut string = String::new();
@@ -159,6 +163,69 @@ impl<'a> Lexer<'a> {
             Some(c) => Err(self.unexpected_character(c, &[], &['\'']))?,
             None => Err(self.eof())?,
           }
+        }
+
+        '0'..='9' => {
+          let mut number = String::new();
+          let mut is_float = false;
+
+          number.push_str(&self.match_until(c, |c, _| {
+            Ok(match c {
+              '0'..='9' => Some(c.to_string()),
+              '.' => {
+                if is_float {
+                  None
+                } else {
+                  is_float = true;
+                  Some(c.to_string())
+                }
+              }
+              _ => None,
+            })
+          })?);
+
+          let mut number_type = if is_float {
+            NumericType::F64
+          } else {
+            NumericType::I32
+          };
+
+          match self.input.peek() {
+            Some(&c) if c.is_alphabetic() => {
+              self.advance();
+
+              let mut number_type_str = String::new();
+              number_type_str.push_str(&self.match_until(c, |c, _| {
+                Ok(match c {
+                  '0'..='9' => Some(c.to_string()),
+                  _ => None,
+                })
+              })?);
+
+              number_type = match number_type_str.as_str() {
+                "c" => NumericType::Char,
+                "u8" => NumericType::U8,
+                "u16" => NumericType::U16,
+                "u32" => NumericType::U32,
+                "u64" => NumericType::U64,
+                "u128" => NumericType::U128,
+                "i8" => NumericType::I8,
+                "i16" => NumericType::I16,
+                "i32" => NumericType::I32,
+                "i64" => NumericType::I64,
+                "i128" => NumericType::I128,
+                "f32" => NumericType::F32,
+                "f64" => NumericType::F64,
+                _ => Err(Error(
+                  self.last_char(),
+                  LexerError::InvalidNumericType(number_type_str),
+                ))?,
+              };
+            }
+            _ => (),
+          }
+
+          Ok(TokenKind::NumberLiteral(number, number_type))
         }
 
         '(' => Ok(TokenKind::LeftParen),
@@ -470,6 +537,53 @@ mod tests {
           )
         ),
         (25..25, TokenKind::Eof)
+      ]
+    );
+  }
+
+  #[test]
+  fn test_number() {
+    assert_eq!(
+      Lexer::new("123").lex(false).unwrap(),
+      vec![
+        (
+          (0..3),
+          TokenKind::NumberLiteral("123".to_string(), NumericType::I32)
+        ),
+        ((3..3), TokenKind::Eof)
+      ]
+    );
+
+    assert_eq!(
+      Lexer::new("123u8").lex(false).unwrap(),
+      vec![
+        (
+          (0..5),
+          TokenKind::NumberLiteral("123".to_string(), NumericType::U8)
+        ),
+        ((5..5), TokenKind::Eof)
+      ]
+    );
+
+    assert_eq!(
+      Lexer::new("123.456").lex(false).unwrap(),
+      vec![
+        (
+          (0..7),
+          TokenKind::NumberLiteral("123.456".to_string(), NumericType::F64)
+        ),
+        ((7..7), TokenKind::Eof)
+      ]
+    );
+
+    assert_eq!(
+      Lexer::new("123.456c").lex(false).unwrap(),
+      vec![
+        (
+          (0..8),
+          TokenKind::NumberLiteral("123.456".to_string(), NumericType::Char)
+        ),
+        ((8..8), TokenKind::Eof)
       ]
     );
   }

@@ -1,7 +1,7 @@
 use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
 use std::ops::{Range, RangeInclusive};
 
-use crate::lexer::token::TokenKind;
+use crate::lexer::token::{NumericType, TokenKind};
 
 pub trait Reportable {
   fn report(&self, span: Range<usize>, name: &'static str) -> Report<'_, (&str, Range<usize>)>;
@@ -25,11 +25,13 @@ pub enum LexerError {
   UnexpectedCharacter(char, &'static [RangeInclusive<char>], &'static [char]),
   UnexpectedEof(usize),
   InvalidCodepoint(String),
+  InvalidNumericType(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParserError {
   UnexpectedToken(Option<TokenKind>, Vec<TokenKind>),
+  InvalidNumber(String, NumericType),
 }
 
 impl Reportable for LexerError {
@@ -72,6 +74,7 @@ impl Reportable for LexerError {
           LexerError::InvalidCodepoint(codepoint) => {
             format!("Invalid code point 0x{}", codepoint)
           }
+          LexerError::InvalidNumericType(ty) => format!("Invalid numeric type {}", ty),
         })
         .with_color(b),
     );
@@ -106,14 +109,14 @@ impl Reportable for ParserError {
             ParserError::UnexpectedToken(token, expected) => {
               let items = expected
                 .iter()
-                .map(|c| format!("{}", c).fg(b).to_string())
+                .map(|c| c.fg(b).to_string())
                 .collect::<Vec<_>>();
 
               format!(
                 "Unexpected {}{}",
                 match token {
                   None | Some(TokenKind::Eof) => "end of input".to_string(),
-                  Some(t) => format!("{}", t).fg(b).to_string(),
+                  Some(t) => t.fg(b).to_string(),
                 },
                 if items.is_empty() {
                   "".to_string()
@@ -122,6 +125,7 @@ impl Reportable for ParserError {
                 }
               )
             }
+            ParserError::InvalidNumber(s, ty) => format!("Invalid number {} for type {}", s, ty),
           })
           .with_color(b),
       )

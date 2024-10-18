@@ -1,6 +1,6 @@
 use super::util;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Operator {
   pub header: Header,
   pub body: util::Expression,

@@ -43,6 +43,8 @@ fn main() {
       B,
       C
     };
+
+    pub fn z() 65c.0c;
   };
 "#
   .trim();

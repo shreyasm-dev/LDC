@@ -1,12 +1,12 @@
 use super::{function, operator, r#enum, r#struct, r#trait, util};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Module {
   pub items: Vec<(util::Modifiers, Item)>,
 }
 
 // TODO: generics and traits (trait bounds, default implementations, fields?)
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Item {
   Function(function::Function),
   Struct(r#struct::Struct),

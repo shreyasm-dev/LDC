@@ -11,6 +11,7 @@ pub enum TokenKind {
   Identifier(String),
   StringLiteral(String),
   CharLiteral(char),
+  NumberLiteral(String, NumericType),
 
   Fn,
   Struct,
@@ -25,21 +26,7 @@ pub enum TokenKind {
   Else,
   Return,
 
-  Char,
-  I8,
-  I16,
-  I32,
-  I64,
-  I128,
-  U8,
-  U16,
-  U32,
-  U64,
-  U128,
-  F16,
-  F32,
-  F64,
-  F128,
+  Numeric(NumericType),
 
   LeftParen,
   RightParen,
@@ -52,6 +39,23 @@ pub enum TokenKind {
   Semicolon,
 
   Operator(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum NumericType {
+  Char,
+  I8,
+  I16,
+  I32,
+  I64,
+  I128,
+  U8,
+  U16,
+  U32,
+  U64,
+  U128,
+  F32,
+  F64,
 }
 
 impl TokenKind {
@@ -114,21 +118,19 @@ impl TokenKind {
       "else" => TokenKind::Else,
       "return" => TokenKind::Return,
 
-      "char" => TokenKind::Char,
-      "i8" => TokenKind::I8,
-      "i16" => TokenKind::I16,
-      "i32" => TokenKind::I32,
-      "i64" => TokenKind::I64,
-      "i128" => TokenKind::I128,
-      "u8" => TokenKind::U8,
-      "u16" => TokenKind::U16,
-      "u32" => TokenKind::U32,
-      "u64" => TokenKind::U64,
-      "u128" => TokenKind::U128,
-      "f16" => TokenKind::F16,
-      "f32" => TokenKind::F32,
-      "f64" => TokenKind::F64,
-      "f128" => TokenKind::F128,
+      "char" => TokenKind::Numeric(NumericType::Char),
+      "i8" => TokenKind::Numeric(NumericType::I8),
+      "i16" => TokenKind::Numeric(NumericType::I16),
+      "i32" => TokenKind::Numeric(NumericType::I32),
+      "i64" => TokenKind::Numeric(NumericType::I64),
+      "i128" => TokenKind::Numeric(NumericType::I128),
+      "u8" => TokenKind::Numeric(NumericType::U8),
+      "u16" => TokenKind::Numeric(NumericType::U16),
+      "u32" => TokenKind::Numeric(NumericType::U32),
+      "u64" => TokenKind::Numeric(NumericType::U64),
+      "u128" => TokenKind::Numeric(NumericType::U128),
+      "f32" => TokenKind::Numeric(NumericType::F32),
+      "f64" => TokenKind::Numeric(NumericType::F64),
 
       _ => TokenKind::Identifier(ident),
     }
@@ -136,6 +138,7 @@ impl TokenKind {
 }
 
 impl std::fmt::Display for TokenKind {
+  // TODOS
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(
       f,
@@ -148,6 +151,7 @@ impl std::fmt::Display for TokenKind {
         TokenKind::Identifier(_) => "identifier",
         TokenKind::StringLiteral(_) => "string literal",
         TokenKind::CharLiteral(_) => "character literal",
+        TokenKind::NumberLiteral(_, _) => "number literal",
 
         TokenKind::Fn => "fn",
         TokenKind::Struct => "struct",
@@ -162,21 +166,19 @@ impl std::fmt::Display for TokenKind {
         TokenKind::Else => "else",
         TokenKind::Return => "return",
 
-        TokenKind::Char => "char",
-        TokenKind::I8 => "i8",
-        TokenKind::I16 => "i16",
-        TokenKind::I32 => "i32",
-        TokenKind::I64 => "i64",
-        TokenKind::I128 => "i128",
-        TokenKind::U8 => "u8",
-        TokenKind::U16 => "u16",
-        TokenKind::U32 => "u32",
-        TokenKind::U64 => "u64",
-        TokenKind::U128 => "u128",
-        TokenKind::F16 => "f16",
-        TokenKind::F32 => "f32",
-        TokenKind::F64 => "f64",
-        TokenKind::F128 => "f128",
+        TokenKind::Numeric(NumericType::Char) => "char",
+        TokenKind::Numeric(NumericType::I8) => "i8",
+        TokenKind::Numeric(NumericType::I16) => "i16",
+        TokenKind::Numeric(NumericType::I32) => "i32",
+        TokenKind::Numeric(NumericType::I64) => "i64",
+        TokenKind::Numeric(NumericType::I128) => "i128",
+        TokenKind::Numeric(NumericType::U8) => "u8",
+        TokenKind::Numeric(NumericType::U16) => "u16",
+        TokenKind::Numeric(NumericType::U32) => "u32",
+        TokenKind::Numeric(NumericType::U64) => "u64",
+        TokenKind::Numeric(NumericType::U128) => "u128",
+        TokenKind::Numeric(NumericType::F32) => "f32",
+        TokenKind::Numeric(NumericType::F64) => "f64",
 
         TokenKind::LeftParen => "left parenthesis",
         TokenKind::RightParen => "right parenthesis",
@@ -189,6 +191,30 @@ impl std::fmt::Display for TokenKind {
         TokenKind::Semicolon => "semicolon",
 
         TokenKind::Operator(_) => "operator",
+      }
+    )
+  }
+}
+
+impl std::fmt::Display for NumericType {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "{}",
+      match self {
+        NumericType::Char => "char",
+        NumericType::I8 => "i8",
+        NumericType::I16 => "i16",
+        NumericType::I32 => "i32",
+        NumericType::I64 => "i64",
+        NumericType::I128 => "i128",
+        NumericType::U8 => "u8",
+        NumericType::U16 => "u16",
+        NumericType::U32 => "u32",
+        NumericType::U64 => "u64",
+        NumericType::U128 => "u128",
+        NumericType::F32 => "f32",
+        NumericType::F64 => "f64",
       }
     )
   }
