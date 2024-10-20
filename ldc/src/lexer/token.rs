@@ -73,7 +73,7 @@ impl TokenKind {
     // https://dart.dev/language/operators
     match self {
       TokenKind::Operator(operator) => match operator.as_str() {
-        "." => 15,
+        "." | "::" => 15,
         "*" | "/" | "%" => 13,
         "+" | "-" => 12,
         "<<" | ">>" | ">>>" => 11,
@@ -138,7 +138,7 @@ impl TokenKind {
 }
 
 impl std::fmt::Display for TokenKind {
-  // TODOS
+  // TODO
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     write!(
       f,
@@ -180,17 +180,22 @@ impl std::fmt::Display for TokenKind {
         TokenKind::Numeric(NumericType::F32) => "f32",
         TokenKind::Numeric(NumericType::F64) => "f64",
 
-        TokenKind::LeftParen => "left parenthesis",
-        TokenKind::RightParen => "right parenthesis",
-        TokenKind::LeftBrace => "left brace",
-        TokenKind::RightBrace => "right brace",
-        TokenKind::LeftBracket => "left bracket",
-        TokenKind::RightBracket => "right bracket",
+        TokenKind::LeftParen => "(",
+        TokenKind::RightParen => ")",
+        TokenKind::LeftBrace => "{",
+        TokenKind::RightBrace => "}",
+        TokenKind::LeftBracket => "[",
+        TokenKind::RightBracket => "]",
 
-        TokenKind::Comma => "comma",
-        TokenKind::Semicolon => "semicolon",
+        TokenKind::Comma => ",",
+        TokenKind::Semicolon => ";",
 
-        TokenKind::Operator(_) => "operator",
+        TokenKind::Operator(op) =>
+          if op.is_empty() {
+            "operator"
+          } else {
+            op
+          },
       }
     )
   }

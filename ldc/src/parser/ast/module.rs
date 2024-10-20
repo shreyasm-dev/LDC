@@ -5,7 +5,7 @@ pub struct Module {
   pub items: Vec<(util::Modifiers, Item)>,
 }
 
-// TODO: generics and traits (trait bounds, default implementations, fields?)
+// TODO: traits (trait bounds, default implementations, fields?)
 #[derive(Debug, Clone, PartialEq)]
 pub enum Item {
   Function(function::Function),

@@ -182,5 +182,7 @@ impl NumberLiteral {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypeParameter {
   pub name: String,
-  pub traits: Vec<String>,
+  pub traits: Vec<Path>,
 }
+
+pub type Path = Vec<String>;

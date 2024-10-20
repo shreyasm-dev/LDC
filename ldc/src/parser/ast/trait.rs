@@ -1,6 +1,5 @@
 use super::util;
 
-// TODO: local sub-traits
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Trait {
   pub header: Header,
@@ -11,7 +10,7 @@ pub struct Trait {
 pub struct Header {
   pub name: String,
   pub type_parameters: Vec<util::TypeParameter>,
-  pub traits: Vec<String>,
+  pub traits: Vec<util::Path>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -20,6 +19,7 @@ pub enum Item {
   Struct(Struct),
   Enum(Enum),
   Trait(Trait_),
+  Child(Trait),
   Operator(Operator),
 }
 
@@ -41,14 +41,14 @@ pub struct Enum {
 pub struct Struct {
   pub name: String,
   pub type_parameters: Vec<util::TypeParameter>,
-  pub traits: Vec<String>,
+  pub traits: Vec<util::Path>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Trait_ {
   pub name: String,
   pub type_parameters: Vec<util::TypeParameter>,
-  pub traits: Vec<String>,
+  pub traits: Vec<util::Path>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

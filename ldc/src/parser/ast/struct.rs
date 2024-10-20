@@ -10,5 +10,5 @@ pub struct Struct {
 pub struct Header {
   pub name: String,
   pub type_parameters: Vec<util::TypeParameter>,
-  pub traits: Vec<String>,
+  pub traits: Vec<util::Path>,
 }

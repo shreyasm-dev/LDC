@@ -14,6 +14,7 @@ macro_rules! expect {
   }
 }
 
+#[derive(Debug, Clone)]
 pub struct Parser<'a> {
   pub tokens: Peekable<Iter<'a, Token>>,
 }
@@ -23,7 +24,6 @@ impl Parser<'_> {
     Parser { tokens }
   }
 
-  // TODO: handle a none value properly
   pub fn error(&self, token: Option<&Token>, error: ParserError) -> Error<ParserError> {
     Error(token.map_or(0..0, |t| t.0.clone()), error)
   }
@@ -114,6 +114,41 @@ impl Parser<'_> {
       }
       None => Err(self.error(None, ParserError::UnexpectedToken(None, expected)))?,
     }
+
+    Ok(items)
+  }
+
+  pub fn expect_list_without_end<T, F>(
+    &mut self,
+    separator: TokenKind,
+    parse: F,
+  ) -> Result<Vec<T>, Error<ParserError>>
+  where
+    F: Fn(&mut Parser) -> Result<T, Error<ParserError>>,
+  {
+    let mut clone = self.clone();
+    let mut items = Vec::new();
+
+    match clone.tokens.peek().copied() {
+      Some(_) => {
+        items.push(parse(&mut clone)?);
+        loop {
+          match clone.tokens.peek().cloned() {
+            Some((_, ref token)) if *token == separator => {
+              clone.tokens.next();
+              match parse(&mut clone) {
+                Ok(item) => items.push(item),
+                Err(_) => break,
+              }
+            }
+            _ => break,
+          }
+        }
+      }
+      None => (),
+    }
+
+    std::mem::swap(&mut self.tokens, &mut clone.tokens);
 
     Ok(items)
   }
@@ -230,14 +265,7 @@ impl Parser<'_> {
 
     let name = self.expect_identifier()?;
     let type_parameters = self.parse_type_parameter()?;
-
-    let traits = match self.tokens.peek() {
-      Some((_, TokenKind::Operator(operator))) if operator == ":" => {
-        self.tokens.next();
-        self.expect_identifier_list(TokenKind::Comma)?
-      }
-      _ => Vec::new(),
-    };
+    let traits = self.parse_traits()?;
 
     let header = r#struct::Header {
       name,
@@ -302,13 +330,7 @@ impl Parser<'_> {
 
     let name = self.expect_identifier()?;
     let type_parameters = self.parse_type_parameter()?;
-    let traits = match self.tokens.peek() {
-      Some((_, TokenKind::Operator(operator))) if operator == ":" => {
-        self.tokens.next();
-        self.expect_identifier_list(TokenKind::Comma)?
-      }
-      _ => Vec::new(),
-    };
+    let traits = self.parse_traits()?;
 
     let header = r#trait::Header {
       name,
@@ -354,13 +376,7 @@ impl Parser<'_> {
       TokenKind::Struct = TokenKind::Struct => {
         let name = self.expect_identifier()?;
         let type_parameters = self.parse_type_parameter()?;
-        let traits = match self.tokens.peek() {
-          Some((_, TokenKind::Operator(operator))) if operator == ":" => {
-            self.tokens.next();
-            self.expect_identifier_list(TokenKind::Comma)?
-          }
-          _ => Vec::new(),
-        };
+        let traits = self.parse_traits()?;
 
         r#trait::Item::Struct(r#trait::Struct { name, type_parameters, traits })
       },
@@ -373,15 +389,30 @@ impl Parser<'_> {
       TokenKind::Trait = TokenKind::Trait => {
         let name = self.expect_identifier()?;
         let type_parameters = self.parse_type_parameter()?;
-        let traits = match self.tokens.peek() {
-          Some((_, TokenKind::Operator(operator))) if operator == ":" => {
-            self.tokens.next();
-            self.expect_identifier_list(TokenKind::Comma)?
-          }
-          _ => Vec::new(),
-        };
+        let traits = self.parse_traits()?;
 
-        r#trait::Item::Trait(r#trait::Trait_ { name, type_parameters, traits })
+        match self.tokens.peek() {
+          Some((_, TokenKind::LeftBrace)) => {
+            let header = r#trait::Header { name, type_parameters, traits };
+
+            self.tokens.next();
+
+            let mut items = Vec::new();
+
+            loop {
+              match self.tokens.peek() {
+                Some((_, TokenKind::RightBrace)) => {
+                  self.tokens.next();
+                  break;
+                }
+                _ => items.push((self.parse_modifiers(true), self.parse_trait_item()?)),
+              }
+            }
+
+            r#trait::Item::Child(r#trait::Trait { header, items })
+          }
+          _ => r#trait::Item::Trait(r#trait::Trait_ { name, type_parameters, traits })
+        }
       },
       TokenKind::Operator(_) = TokenKind::Operator("".to_string()) => {
         let operator = match self.tokens.next() {
@@ -679,17 +710,10 @@ impl Parser<'_> {
           TokenKind::Comma,
           |parser| {
             let name = parser.expect_identifier()?;
-            match parser.tokens.peek() {
-              Some((_, TokenKind::Operator(operator))) if operator == ":" => {
-                parser.tokens.next();
-                let traits = parser.expect_identifier_list(TokenKind::Comma)?;
-                Ok(util::TypeParameter { name, traits })
-              }
-              _ => Ok(util::TypeParameter {
-                name,
-                traits: Vec::new(),
-              }),
-            }
+            Ok(util::TypeParameter {
+              name,
+              traits: parser.parse_traits()?,
+            })
           },
         )?;
         Ok(parameters)
@@ -756,7 +780,6 @@ impl Parser<'_> {
           })?;
 
           match self.tokens.peek() {
-            // TODO: are there cases where this may cause ambiguity?
             Some((_, TokenKind::Operator(operator))) => match operator.as_str() {
               ":" => {
                 self.tokens.next();
@@ -820,6 +843,18 @@ impl Parser<'_> {
           Err(self.unexpected_token(token, vec![TokenKind::Operator(":".to_string())]))
         }
       }
+    }
+  }
+
+  fn parse_traits(&mut self) -> Result<Vec<util::Path>, Error<ParserError>> {
+    match self.tokens.peek() {
+      Some((_, TokenKind::Operator(operator))) if operator == ":" => {
+        self.tokens.next();
+        self.expect_list_without_end(TokenKind::Comma, |parser| {
+          parser.expect_identifier_list(TokenKind::Operator("::".to_string()))
+        })
+      }
+      _ => Ok(Vec::new()),
     }
   }
 }

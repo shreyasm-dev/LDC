@@ -33,18 +33,21 @@ fn main() {
   trait T {
     pub fn x(a, b): c;
     static fn y(c): ();
+
+    struct Z: Y;
+
+    trait U {
+      pub fn z<Y: T>(): c;
+    };
   };
 
   struct X: T {
     pub fn x() y;
     pub static fn y() x;
-    pub static enum Z {
-      A,
-      B,
-      C
-    };
 
-    pub fn z<U: T>() 65c.0c;
+    pub struct Z: T::U {
+      pub fn z<U: T>() 65c.0c;
+    };
   };
 "#
   .trim();
