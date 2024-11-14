@@ -191,7 +191,7 @@ impl Parser<'_> {
     loop {
       match self.tokens.peek() {
         None | Some((_, TokenKind::Eof)) => break,
-        _ => items.push((self.parse_modifiers(false), self.parse_item()?)),
+        _ => items.push(self.parse_item(false)?),
       }
     }
 
@@ -218,20 +218,22 @@ impl Parser<'_> {
     modifiers
   }
 
-  fn parse_item(&mut self) -> Result<module::Item, Error<ParserError>> {
-    let value = expect! {
+  fn parse_item(&mut self, allow_static: bool) -> Result<module::Item, Error<ParserError>> {
+    let modifiers = self.parse_modifiers(allow_static);
+
+    let kind = expect! {
       self,
       false,
-      TokenKind::Fn = TokenKind::Fn => { module::Item::Function(self.parse_function()?) },
-      TokenKind::Struct = TokenKind::Struct => { module::Item::Struct(self.parse_struct()?) },
-      TokenKind::Enum = TokenKind::Enum => { module::Item::Enum(self.parse_enum()?) },
-      TokenKind::Trait = TokenKind::Trait => { module::Item::Trait(self.parse_trait()?) },
-      TokenKind::Operator(_) = TokenKind::Operator("".to_string()) => { module::Item::Operator(self.parse_operator()?) }
+      TokenKind::Fn = TokenKind::Fn => { module::ItemKind::Function(self.parse_function()?) },
+      TokenKind::Struct = TokenKind::Struct => { module::ItemKind::Struct(self.parse_struct()?) },
+      TokenKind::Enum = TokenKind::Enum => { module::ItemKind::Enum(self.parse_enum()?) },
+      TokenKind::Trait = TokenKind::Trait => { module::ItemKind::Trait(self.parse_trait()?) },
+      TokenKind::Operator(_) = TokenKind::Operator("".to_string()) => { module::ItemKind::Operator(self.parse_operator()?) }
     }?;
 
     self.expect(vec![TokenKind::Semicolon])?;
 
-    Ok(value)
+    Ok(module::Item { modifiers, kind })
   }
 
   fn parse_function(&mut self) -> Result<function::Function, Error<ParserError>> {
@@ -283,11 +285,14 @@ impl Parser<'_> {
           self.tokens.next();
           break;
         }
-        _ => items.push((self.parse_modifiers(true), self.parse_item()?)),
+        _ => items.push(self.parse_item(true)?),
       }
     }
 
-    Ok(r#struct::Struct { header, items })
+    Ok(r#struct::Struct {
+      header,
+      module: module::Module { items },
+    })
   }
 
   fn parse_enum(&mut self) -> Result<r#enum::Enum, Error<ParserError>> {

@@ -7,6 +7,7 @@ mod lexer;
 mod parser;
 
 fn main() {
+  let name = "[]";
   let source = r#"
   pub enum X {
     Y,
@@ -65,13 +66,13 @@ fn main() {
       match ast {
         Ok(ast) => println!("{:#?}", ast),
         Err(error) => {
-          error.print(source, "[]");
+          error.print(source, name);
           process::exit(1);
         }
       }
     }
     Err(error) => {
-      error.print(source, "[]");
+      error.print(source, name);
       process::exit(1);
     }
   }
