@@ -1,7 +1,6 @@
+use crate::lexer::token::{NumericType, TokenKind};
 use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
 use std::ops::{Range, RangeInclusive};
-
-use crate::lexer::token::{NumericType, TokenKind};
 
 pub trait Reportable {
   fn report(&self, span: Range<usize>, name: &'static str) -> Report<'_, (&str, Range<usize>)>;
@@ -32,6 +31,13 @@ pub enum LexerError {
 pub enum ParserError {
   UnexpectedToken(Option<TokenKind>, Vec<TokenKind>),
   InvalidNumber(String, NumericType),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypecheckerError<T> {
+  InvalidType { expected: T, found: T },
+  InvalidArguments { expected: Vec<T>, found: Vec<T> },
+  Todo,
 }
 
 impl Reportable for LexerError {

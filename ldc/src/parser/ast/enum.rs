@@ -1,9 +1,9 @@
 use super::util;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Enum {
+pub struct Enum<T> {
   pub header: Header,
-  pub variants: Vec<Variant>,
+  pub variants: Vec<Variant<T>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -13,7 +13,7 @@ pub struct Header {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Variant {
+pub struct Variant<T> {
   pub name: String,
-  pub fields: Vec<util::Type>,
+  pub fields: Vec<T>,
 }

@@ -1,18 +1,10 @@
 use super::ast::*;
 use crate::{
   error::{Error, ParserError},
+  expect,
   lexer::token::{NumericType, Token, TokenKind},
 };
-use std::{iter::Peekable, slice::Iter};
-
-macro_rules! expect {
-  ($self:ident, $next:expr, $($token:pat = $value:expr => $block:block),*) => {
-    match if $next { $self.tokens.next() } else { $self.tokens.peek().copied() } {
-      $(Some((_, $token)) => Ok($block),)*
-      token => Err($self.unexpected_token(token, vec![$($value),*])),
-    }
-  }
-}
+use std::{collections::BTreeSet, iter::Peekable, slice::Iter};
 
 #[derive(Debug, Clone)]
 pub struct Parser<'a> {
@@ -185,7 +177,7 @@ impl Parser<'_> {
     Ok(items)
   }
 
-  pub fn parse(&mut self) -> Result<module::Module, Error<ParserError>> {
+  pub fn parse(&mut self) -> Result<module::Module<util::Type>, Error<ParserError>> {
     let mut items = Vec::new();
 
     loop {
@@ -218,7 +210,10 @@ impl Parser<'_> {
     modifiers
   }
 
-  fn parse_item(&mut self, allow_static: bool) -> Result<module::Item, Error<ParserError>> {
+  fn parse_item(
+    &mut self,
+    allow_static: bool,
+  ) -> Result<module::Item<util::Type>, Error<ParserError>> {
     let modifiers = self.parse_modifiers(allow_static);
 
     let kind = expect! {
@@ -236,7 +231,7 @@ impl Parser<'_> {
     Ok(module::Item { modifiers, kind })
   }
 
-  fn parse_function(&mut self) -> Result<function::Function, Error<ParserError>> {
+  fn parse_function(&mut self) -> Result<function::Function<util::Type>, Error<ParserError>> {
     self.expect(vec![TokenKind::Fn])?;
 
     let name = self.expect_identifier()?;
@@ -262,7 +257,7 @@ impl Parser<'_> {
     Ok(function::Function { header, body })
   }
 
-  fn parse_struct(&mut self) -> Result<r#struct::Struct, Error<ParserError>> {
+  fn parse_struct(&mut self) -> Result<r#struct::Struct<util::Type>, Error<ParserError>> {
     self.expect(vec![TokenKind::Struct])?;
 
     let name = self.expect_identifier()?;
@@ -295,7 +290,7 @@ impl Parser<'_> {
     })
   }
 
-  fn parse_enum(&mut self) -> Result<r#enum::Enum, Error<ParserError>> {
+  fn parse_enum(&mut self) -> Result<r#enum::Enum<util::Type>, Error<ParserError>> {
     self.expect(vec![TokenKind::Enum])?;
 
     let name = self.expect_identifier()?;
@@ -314,7 +309,7 @@ impl Parser<'_> {
     Ok(r#enum::Enum { header, variants })
   }
 
-  fn parse_enum_variant(&mut self) -> Result<r#enum::Variant, Error<ParserError>> {
+  fn parse_enum_variant(&mut self) -> Result<r#enum::Variant<util::Type>, Error<ParserError>> {
     let name = self.expect_identifier()?;
 
     let fields = match self.tokens.peek() {
@@ -330,7 +325,7 @@ impl Parser<'_> {
     Ok(r#enum::Variant { name, fields })
   }
 
-  fn parse_trait(&mut self) -> Result<r#trait::Trait, Error<ParserError>> {
+  fn parse_trait(&mut self) -> Result<r#trait::Trait<util::Type>, Error<ParserError>> {
     self.expect(vec![TokenKind::Trait])?;
 
     let name = self.expect_identifier()?;
@@ -360,7 +355,7 @@ impl Parser<'_> {
     Ok(r#trait::Trait { header, items })
   }
 
-  fn parse_trait_item(&mut self) -> Result<r#trait::Item, Error<ParserError>> {
+  fn parse_trait_item(&mut self) -> Result<r#trait::Item<util::Type>, Error<ParserError>> {
     let value = expect! {
       self,
       true,
@@ -464,7 +459,7 @@ impl Parser<'_> {
   }
 
   // TODO: we need to make sure that the types are ultimately concrete
-  fn parse_operator(&mut self) -> Result<operator::Operator, Error<ParserError>> {
+  fn parse_operator(&mut self) -> Result<operator::Operator<util::Type>, Error<ParserError>> {
     let operator = match self.tokens.next() {
       Some((_, TokenKind::Operator(operator))) => operator,
       token => Err(self.unexpected_token(token, vec![TokenKind::Operator("".to_string())]))?,
@@ -487,18 +482,18 @@ impl Parser<'_> {
 
     let result = self.parse_type_annotation(false)?.unwrap();
     let header = match b {
-      Some(b) => operator::Header::Infix {
+      Some(b) => operator::Header::Infix(operator::Infix {
         operator,
         type_parameters,
         operands: (a, b),
         result,
-      },
-      None => operator::Header::Prefix {
+      }),
+      None => operator::Header::Prefix(operator::Prefix {
         operator,
         type_parameters,
         operand: a,
         result,
-      },
+      }),
     };
 
     let body = self.parse_expression()?;
@@ -506,7 +501,7 @@ impl Parser<'_> {
     Ok(operator::Operator { header, body })
   }
 
-  fn parse_parameter(&mut self) -> Result<util::Parameter, Error<ParserError>> {
+  fn parse_parameter(&mut self) -> Result<util::Parameter<util::Type>, Error<ParserError>> {
     let name = self.expect_identifier()?;
 
     self.expect_operator(vec![":"])?;
@@ -516,14 +511,14 @@ impl Parser<'_> {
     Ok(util::Parameter { name, ty })
   }
 
-  fn parse_expression(&mut self) -> Result<util::Expression, Error<ParserError>> {
+  fn parse_expression(&mut self) -> Result<util::Expression<util::Type>, Error<ParserError>> {
     self.parse_expression_with_precedence(0)
   }
 
   fn parse_expression_with_precedence(
     &mut self,
     precedence: u8,
-  ) -> Result<util::Expression, Error<ParserError>> {
+  ) -> Result<util::Expression<util::Type>, Error<ParserError>> {
     let mut expression = match self.tokens.next() {
       Some((_, TokenKind::Operator(operator))) => {
         let operator = operator.to_string();
@@ -643,6 +638,8 @@ impl Parser<'_> {
           parser.parse_expression()
         })?,
       ))),
+      Some((_, TokenKind::True)) => Ok(util::Expression::Literal(util::Literal::Bool(true))),
+      Some((_, TokenKind::False)) => Ok(util::Expression::Literal(util::Literal::Bool(false))),
       token => Err(self.unexpected_token(
         token,
         vec![
@@ -730,6 +727,7 @@ impl Parser<'_> {
   fn parse_type(&mut self) -> Result<util::Type, Error<ParserError>> {
     let expected = vec![
       TokenKind::Identifier("".to_string()),
+      TokenKind::Bool,
       TokenKind::Numeric(NumericType::Char),
       TokenKind::Numeric(NumericType::I8),
       TokenKind::Numeric(NumericType::I16),
@@ -765,6 +763,8 @@ impl Parser<'_> {
             _ => Vec::new(),
           },
         ),
+
+        TokenKind::Bool => util::Type::Bool,
 
         TokenKind::Numeric(NumericType::Char) => util::Type::Char,
         TokenKind::Numeric(NumericType::I8) => util::Type::I8,
@@ -814,22 +814,48 @@ impl Parser<'_> {
         _ => Err(self.unexpected_token(Some(token), expected))?,
       }),
       None => Err(self.unexpected_token(None, expected))?,
-    };
-
-    if let Some(&(_, TokenKind::Operator(operator))) = self.tokens.peek() {
-      match operator.as_str() {
-        "|" => {
-          self.tokens.next();
-          Ok(util::Type::Union(
-            Box::new(ty?),
-            Box::new(self.parse_type()?),
-          ))
-        }
-        _ => ty,
-      }
-    } else {
-      ty
     }
+    .map(|ty| ty.reduce())?;
+
+    Ok(
+      if let Some(&(_, TokenKind::Operator(operator))) = self.tokens.peek() {
+        match operator.as_str() {
+          "|" => {
+            self.tokens.next();
+
+            let mut types = BTreeSet::new();
+
+            match ty {
+              util::Type::Union(mut union) => types.append(&mut union),
+              ty => {
+                types.insert(ty);
+              }
+            }
+
+            loop {
+              match self.parse_type()? {
+                util::Type::Union(mut union) => types.append(&mut union),
+                ty => {
+                  types.insert(ty);
+                }
+              }
+
+              match self.tokens.peek() {
+                Some((_, TokenKind::Operator(operator))) if operator == "|" => {
+                  self.tokens.next();
+                }
+                _ => break,
+              }
+            }
+
+            util::Type::Union(types)
+          }
+          _ => ty,
+        }
+      } else {
+        ty
+      },
+    )
   }
 
   fn parse_type_annotation(

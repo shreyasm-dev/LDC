@@ -25,6 +25,9 @@ pub enum TokenKind {
   If,
   Else,
   Return,
+  Bool,
+  True,
+  False,
 
   Numeric(NumericType),
 
@@ -117,6 +120,9 @@ impl TokenKind {
       "if" => TokenKind::If,
       "else" => TokenKind::Else,
       "return" => TokenKind::Return,
+      "bool" => TokenKind::Bool,
+      "true" => TokenKind::True,
+      "false" => TokenKind::False,
 
       "char" => TokenKind::Numeric(NumericType::Char),
       "i8" => TokenKind::Numeric(NumericType::I8),
@@ -165,6 +171,9 @@ impl std::fmt::Display for TokenKind {
         TokenKind::If => "if",
         TokenKind::Else => "else",
         TokenKind::Return => "return",
+        TokenKind::Bool => "bool",
+        TokenKind::True => "true",
+        TokenKind::False => "false",
 
         TokenKind::Numeric(NumericType::Char) => "char",
         TokenKind::Numeric(NumericType::I8) => "i8",

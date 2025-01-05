@@ -1,9 +1,9 @@
 use super::util;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Trait {
+pub struct Trait<T> {
   pub header: Header,
-  pub items: Vec<(util::Modifiers, Item)>,
+  pub items: Vec<(util::Modifiers, Item<T>)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -14,21 +14,21 @@ pub struct Header {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Item {
-  Function(Function),
+pub enum Item<T> {
+  Function(Function<T>),
   Struct(Struct),
   Enum(Enum),
   Trait(Trait_),
-  Child(Trait),
-  Operator(Operator),
+  Child(Trait<T>),
+  Operator(Operator<T>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Function {
+pub struct Function<T> {
   pub name: String,
   pub type_parameters: Vec<util::TypeParameter>,
   pub parameters: Vec<util::Type>,
-  pub ty: util::Type,
+  pub ty: T,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -52,17 +52,17 @@ pub struct Trait_ {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Operator {
+pub enum Operator<T> {
   Prefix {
     operator: String,
     type_parameters: Vec<util::TypeParameter>,
-    operand: util::Type,
-    result: util::Type,
+    operand: T,
+    result: T,
   },
   Infix {
     operator: String,
     type_parameters: Vec<util::TypeParameter>,
-    operands: (util::Type, util::Type),
-    result: util::Type,
+    operands: (T, T),
+    result: T,
   },
 }

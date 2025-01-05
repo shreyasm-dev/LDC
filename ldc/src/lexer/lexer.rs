@@ -1,55 +1,13 @@
 use super::token::{NumericType, Token, TokenKind};
-use crate::error::{Error, LexerError};
+use crate::{
+  error::{Error, LexerError},
+  escape, match_operators,
+};
 use std::{
   iter::Peekable,
   ops::{Range, RangeInclusive},
   str::Chars,
 };
-
-macro_rules! escape {
-  ($span:expr, $x:expr, $string:expr, $($c:expr => $r:expr),* $(,)?) => {
-    match $x {
-      $(
-        $c => Ok($r),
-      )*
-      _ => {
-        Err(Error(
-          $span,
-          LexerError::UnexpectedCharacter($x, &[], &[$($c),*]),
-        ))
-      },
-    }
-  }
-}
-
-macro_rules! match_operators {
-  ($self:ident, $c:expr, $else:expr => $($op:expr)* $(,)?) => {
-    $(
-      if $c == $op.chars().next().unwrap() && 'matches: {
-        let mut cloned = $self.clone();
-
-        for (_, expected) in $op.chars().enumerate().skip(1) {
-          match cloned.input.peek() {
-            Some(&c) if c == expected => {
-              cloned.advance();
-            }
-            _ => {
-              break 'matches false;
-            }
-          }
-        }
-
-        let _ = std::mem::replace($self, cloned);
-
-        true
-      } {
-        Ok(TokenKind::Operator($op.to_string()))
-      }
-    ) else* else {
-      $else
-    }
-  };
-}
 
 #[derive(Debug, Clone)]
 pub struct Lexer<'a> {
