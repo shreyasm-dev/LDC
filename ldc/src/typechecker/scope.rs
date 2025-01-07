@@ -1,14 +1,15 @@
 use crate::parser::ast;
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Scope {
-  pub parent: Option<Box<Scope>>,
+  pub parent: Option<Rc<RefCell<Scope>>>,
   pub items: HashMap<String, Item>,
 }
 
 impl Scope {
-  pub fn new(parent: Option<Box<Scope>>) -> Scope {
+  pub fn new(parent: Option<Rc<RefCell<Scope>>>) -> Scope {
     Scope {
       parent,
       items: HashMap::new(),
@@ -22,18 +23,19 @@ impl Scope {
   pub fn set(&mut self, name: String, item: Item) {
     match self.items.get_mut(&name) {
       Some(i) => *i = item,
-      None => match &mut self.parent {
-        Some(parent) => parent.set(name, item),
+      None => match &self.parent {
+        Some(parent) => parent.borrow_mut().set(name, item),
         None => self.insert(name, item),
       },
     }
   }
 
-  pub fn get(&self, name: &str) -> Option<&Item> {
+  // TODO: don't clone
+  pub fn get(&self, name: &str) -> Option<Item> {
     match self.items.get(name) {
-      Some(item) => Some(item),
+      Some(item) => Some(item.clone()),
       None => match &self.parent {
-        Some(parent) => parent.get(name),
+        Some(parent) => parent.borrow().get(name),
         None => None,
       },
     }
@@ -41,14 +43,22 @@ impl Scope {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Item {
-  // TODO: variables
-  Function(ast::function::Function<ast::util::Type>),
-  Struct(ast::r#struct::Struct<ast::util::Type>),
-  Enum(ast::r#enum::Enum<ast::util::Type>),
-  Trait(ast::r#trait::Trait<ast::util::Type>),
-  PrefixOperator(ast::operator::Prefix<ast::util::Type>),
-  InfixOperator(ast::operator::Infix<ast::util::Type>),
+pub struct Item(pub Uuid, pub ItemKind);
+
+impl Item {
+  pub fn new(kind: ItemKind) -> Item {
+    Item(Uuid::new_v4(), kind)
+  }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ItemKind {
+  Function(ast::function::Function<ast::util::Type<String>>),
+  Struct(ast::r#struct::Struct<ast::util::Type<String>>),
+  Enum(ast::r#enum::Enum<ast::util::Type<String>>),
+  Trait(ast::r#trait::Trait<ast::util::Type<String>>),
+  PrefixOperator(ast::operator::Prefix<ast::util::Type<String>>),
+  InfixOperator(ast::operator::Infix<ast::util::Type<String>>),
   TypeParameter(ast::util::TypeParameter),
-  Variable(ast::util::Type),
+  Variable(ast::util::Type<String>),
 }

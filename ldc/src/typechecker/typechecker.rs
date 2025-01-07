@@ -1,47 +1,83 @@
-use super::scope::{Item, Scope};
+use super::scope::{Item, ItemKind, Scope};
 use crate::{error::TypecheckerError, parser::ast, union};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use uuid::Uuid;
 
-type Type = ast::util::Type;
+type Type = ast::util::Type<String>;
+type Tagged = ast::util::Type<Uuid>;
 
 #[derive(Debug, Clone)]
-pub struct Typechecker;
+pub struct Typechecker {
+  pub types: HashMap<Uuid, Item>,
+}
 
 impl Typechecker {
-  pub fn typecheck(module: ast::module::Module<Type>) -> Result<Scope, TypecheckerError<Type>> {
-    let mut scope = Scope::new(None);
+  pub fn new() -> Typechecker {
+    Typechecker {
+      types: HashMap::new(),
+    }
+  }
+
+  pub fn typecheck(
+    &mut self,
+    module: ast::module::Module<Type>,
+  ) -> Result<(), TypecheckerError<Type>> {
+    self.typecheck_module(None, module).map(|_| ())
+  }
+
+  pub fn typecheck_module(
+    &mut self,
+    parent: Option<Rc<RefCell<Scope>>>,
+    module: ast::module::Module<Type>,
+  ) -> Result<(), TypecheckerError<Type>> {
+    let mut scope = Scope::new(parent);
 
     for item in &module.items {
       match &item.kind {
         ast::module::ItemKind::Function(f) => {
-          scope.insert(f.header.name.clone(), Item::Function(f.clone()));
+          scope.insert(
+            f.header.name.clone(),
+            Item::new(ItemKind::Function(f.clone())),
+          );
+        }
+        ast::module::ItemKind::Struct(s) => {
+          let item = Item::new(ItemKind::Struct(s.clone()));
+          scope.insert(s.header.name.clone(), item.clone());
+          self.types.insert(item.0, item);
         }
         _ => todo!(),
       }
     }
 
+    let scope_ref = Rc::new(RefCell::new(scope));
     for item in &module.items {
       match &item.kind {
         ast::module::ItemKind::Function(f) => {
-          Self::typecheck_function(scope.clone(), f.clone())?;
+          self.typecheck_function(scope_ref.clone(), f.clone())?;
         }
+        ast::module::ItemKind::Struct(s) => {}
         _ => todo!(),
       }
     }
 
-    Ok(scope)
+    Ok(())
   }
 
   pub fn typecheck_function(
-    parent: Scope,
+    &self,
+    parent: Rc<RefCell<Scope>>,
     function: ast::function::Function<Type>,
   ) -> Result<(), TypecheckerError<Type>> {
-    let mut scope = parent.clone();
+    let mut scope = Scope::new(Some(parent));
 
     for parameter in &function.header.parameters {
-      scope.insert(parameter.name.clone(), Item::Variable(parameter.ty.clone()));
+      scope.insert(
+        parameter.name.clone(),
+        Item::new(ItemKind::Variable(parameter.ty.clone())),
+      );
     }
 
-    let body = Self::typecheck_expression(scope, function.body.clone())?;
+    let body = self.typecheck_expression(Rc::new(RefCell::new(scope)), function.body.clone())?;
 
     if let Some(ty) = &function.header.ty {
       if !body.satisfies(ty) {
@@ -56,7 +92,8 @@ impl Typechecker {
   }
 
   pub fn typecheck_expression(
-    parent: Scope,
+    &self,
+    parent: Rc<RefCell<Scope>>,
     expression: ast::util::Expression<Type>,
   ) -> Result<Type, TypecheckerError<Type>> {
     match expression {
@@ -67,7 +104,7 @@ impl Typechecker {
         let mut value = None;
 
         for expression in expressions {
-          value = Some(Self::typecheck_expression(parent.clone(), expression)?);
+          value = Some(self.typecheck_expression(parent.clone(), expression)?);
         }
 
         if has_value {
@@ -80,7 +117,7 @@ impl Typechecker {
         expression,
         arguments,
       } => {
-        let expression_type = Self::typecheck_expression(parent.clone(), *expression)?;
+        let expression_type = self.typecheck_expression(parent.clone(), *expression)?;
 
         match expression_type {
           Type::Function(parameters, r#type) => {
@@ -89,20 +126,20 @@ impl Typechecker {
                 expected: parameters.clone(),
                 found: arguments
                   .iter()
-                  .map(|a| Self::typecheck_expression(parent.clone(), a.clone()))
+                  .map(|a| self.typecheck_expression(parent.clone(), a.clone()))
                   .collect::<Result<_, _>>()?,
               })?
             }
 
             for (parameter, argument) in parameters.iter().zip(arguments.clone()) {
-              let argument = Self::typecheck_expression(parent.clone(), argument)?;
+              let argument = self.typecheck_expression(parent.clone(), argument)?;
 
               if !argument.satisfies(parameter) {
                 Err(TypecheckerError::InvalidArguments {
                   expected: parameters.clone(),
                   found: arguments
                     .iter()
-                    .map(|a| Self::typecheck_expression(parent.clone(), a.clone()))
+                    .map(|a| self.typecheck_expression(parent.clone(), a.clone()))
                     .collect::<Result<_, _>>()?,
                 })?
               }
@@ -114,9 +151,9 @@ impl Typechecker {
         }
       }
       // TODO: functions, etc.
-      ast::util::Expression::Identifier(name) => match parent.get(&name) {
-        Some(Item::Variable(ty)) => Ok(ty.clone()),
-        Some(Item::Function(f)) => Ok(Type::Function(
+      ast::util::Expression::Identifier(name) => match parent.borrow().get(&name) {
+        Some(Item(_, ItemKind::Variable(ty))) => Ok(ty.clone()),
+        Some(Item(_, ItemKind::Function(f))) => Ok(Type::Function(
           f.header.parameters.iter().map(|p| p.ty.clone()).collect(),
           Box::new(f.header.ty.clone().unwrap_or(Type::Tuple(vec![]))),
         )),
@@ -127,7 +164,7 @@ impl Typechecker {
         consequence,
         alternative,
       } => {
-        let condition = Self::typecheck_expression(parent.clone(), *condition)?;
+        let condition = self.typecheck_expression(parent.clone(), *condition)?;
 
         if !condition.satisfies(&Type::Bool) {
           Err(TypecheckerError::InvalidType {
@@ -136,12 +173,12 @@ impl Typechecker {
           })?
         }
 
-        let consequence: Type = Self::typecheck_expression(parent.clone(), *consequence)?;
+        let consequence: Type = self.typecheck_expression(parent.clone(), *consequence)?;
 
         if let Some(alternative) = alternative {
           Ok(union!(
             consequence,
-            Self::typecheck_expression(parent, *alternative)?
+            self.typecheck_expression(parent, *alternative)?
           ))
         } else {
           Ok(consequence)
@@ -153,7 +190,7 @@ impl Typechecker {
         ast::util::Literal::Tuple(vec) => Ok(Type::Tuple(
           vec
             .into_iter()
-            .map(|e| Self::typecheck_expression(parent.clone(), e))
+            .map(|e| self.typecheck_expression(parent.clone(), e))
             .collect::<Result<_, _>>()?,
         )),
         ast::util::Literal::Number(n) => Ok(n.into()),
@@ -171,12 +208,15 @@ impl Typechecker {
           ty,
           body,
         } => {
-          let mut scope = parent.clone();
+          let mut scope = Scope::new(Some(parent));
           for parameter in &parameters {
-            scope.insert(parameter.name.clone(), Item::Variable(parameter.ty.clone()));
+            scope.insert(
+              parameter.name.clone(),
+              Item::new(ItemKind::Variable(parameter.ty.clone())),
+            );
           }
 
-          let body = Self::typecheck_expression(scope, *body)?;
+          let body = self.typecheck_expression(Rc::new(RefCell::new(scope)), *body)?;
 
           if let Some(ty) = ty {
             if !body.satisfies(&ty) {
@@ -195,10 +235,10 @@ impl Typechecker {
       },
       // TODO: make sure the types of return statements match with the type of blocks
       ast::util::Expression::Return(expression) => {
-        Self::typecheck_expression(parent.clone(), *expression)
+        self.typecheck_expression(parent.clone(), *expression)
       }
       ast::util::Expression::While { condition, body } => {
-        let condition = Self::typecheck_expression(parent.clone(), *condition)?;
+        let condition = self.typecheck_expression(parent.clone(), *condition)?;
 
         if !condition.satisfies(&Type::Bool) {
           Err(TypecheckerError::InvalidType {
@@ -207,10 +247,9 @@ impl Typechecker {
           })?
         }
 
-        Ok(Type::Array(Box::new(Self::typecheck_expression(
-          parent.clone(),
-          *body,
-        )?)))
+        Ok(Type::Array(Box::new(
+          self.typecheck_expression(parent.clone(), *body)?,
+        )))
       }
       _ => todo!(),
     }

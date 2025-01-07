@@ -27,7 +27,7 @@ pub enum Item<T> {
 pub struct Function<T> {
   pub name: String,
   pub type_parameters: Vec<util::TypeParameter>,
-  pub parameters: Vec<util::Type>,
+  pub parameters: Vec<T>,
   pub ty: T,
 }
 

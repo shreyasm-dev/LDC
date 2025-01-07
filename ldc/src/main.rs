@@ -58,8 +58,8 @@ fn main() {
   "#
     .trim(); */
   let source = r#"
-fn x(a: a, b: b, x: bool): a | (a, b) {
-  if x a else (a, b)
+fn hello(a: a::b, b: c, c: c, x: bool): a::b | (a::b, c) {
+  if x a else hello(a, c, b, x)
 };
 "#
   .trim();
@@ -78,7 +78,8 @@ fn x(a: a, b: b, x: bool): a | (a, b) {
         Ok(ast) => {
           println!("{:#?}", ast);
 
-          let result = Typechecker::typecheck(ast.clone());
+          let mut typechecker = Typechecker::new();
+          let result = typechecker.typecheck(ast.clone());
 
           match result {
             Ok(_) => {

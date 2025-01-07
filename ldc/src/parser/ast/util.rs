@@ -23,7 +23,10 @@ pub struct Parameter<T> {
 }
 
 #[derive(Debug, Clone, Eq, Hash, PartialOrd, Ord)]
-pub enum Type {
+pub enum Type<Ref>
+where
+  Ref: Clone + PartialEq + Ord,
+{
   Bool,
   I8,
   I16,
@@ -38,15 +41,15 @@ pub enum Type {
   F32,
   F64,
   Char,
-  Named(String, Vec<Type>),
-  Function(Vec<Type>, Box<Type>),
-  Tuple(Vec<Type>),
-  Array(Box<Type>),
-  Union(BTreeSet<Type>), // the parser guarantees that the union is flat (no unions of unions) and that there is at least one type
+  Named(Vec<Ref>, Vec<Type<Ref>>),
+  Function(Vec<Type<Ref>>, Box<Type<Ref>>),
+  Tuple(Vec<Type<Ref>>),
+  Array(Box<Type<Ref>>),
+  Union(BTreeSet<Type<Ref>>), // the parser guarantees that the union is flat (no unions of unions) and that there is at least one type
 }
 
-impl Type {
-  pub fn reduce(&self) -> Type {
+impl<Ref: Clone + PartialEq + Ord> Type<Ref> {
+  pub fn reduce(&self) -> Type<Ref> {
     match self {
       Type::Named(name, parameters) => {
         Type::Named(name.clone(), parameters.iter().map(Type::reduce).collect())
@@ -70,14 +73,7 @@ impl Type {
     }
   }
 
-  pub fn satisfies(&self, other: &Type) -> bool {
-    println!(
-      "{} ({}) satisfies {} ({})",
-      self.reduce(),
-      self,
-      other.reduce(),
-      other
-    );
+  pub fn satisfies(&self, other: &Type<Ref>) -> bool {
     match (self.reduce(), other.reduce()) {
       (Type::Named(a, _), Type::Named(b, _)) => a == b, // TODO: traits, parameters
       (Type::Function(a, b), Type::Function(c, d)) => {
@@ -98,7 +94,7 @@ impl Type {
   }
 }
 
-impl PartialEq for Type {
+impl<Ref: Clone + PartialEq + Ord> PartialEq for Type<Ref> {
   fn eq(&self, other: &Self) -> bool {
     match (self.reduce(), other.reduce()) {
       // general cases
@@ -130,7 +126,7 @@ impl PartialEq for Type {
   }
 }
 
-impl Display for Type {
+impl<Ref: Clone + PartialEq + Ord + Display> Display for Type<Ref> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       Type::Bool => write!(f, "bool"),
@@ -148,7 +144,14 @@ impl Display for Type {
       Type::F64 => write!(f, "f64"),
       Type::Char => write!(f, "char"),
       Type::Named(name, parameters) => {
-        write!(f, "{}", name)?;
+        for (i, part) in name.iter().enumerate() {
+          if i != 0 {
+            write!(f, "::")?;
+          }
+
+          write!(f, "{}", part)?;
+        }
+
         if !parameters.is_empty() {
           write!(f, "<")?;
           for (i, parameter) in parameters.iter().enumerate() {
@@ -246,7 +249,7 @@ pub enum Literal<T> {
   Bool(bool),
   Closure {
     parameters: Vec<Parameter<T>>,
-    ty: Option<Type>,
+    ty: Option<T>,
     body: Box<Expression<T>>,
   },
 }
@@ -305,8 +308,8 @@ impl<T> NumberLiteral<T> {
   }
 }
 
-impl Into<Type> for NumberLiteral<Type> {
-  fn into(self) -> Type {
+impl<Ref: Clone + PartialEq + Ord> Into<Type<Ref>> for NumberLiteral<Type<Ref>> {
+  fn into(self) -> Type<Ref> {
     map1!(
       self,
       NumberLiteral,
