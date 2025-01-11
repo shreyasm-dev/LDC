@@ -9,6 +9,6 @@ pub struct Struct<T> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Header {
   pub name: String,
-  pub type_parameters: Vec<util::TypeParameter>,
+  // pub type_parameters: Vec<util::TypeParameter>,
   pub traits: Vec<util::Path>,
 }

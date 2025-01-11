@@ -53,12 +53,11 @@ impl Item {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ItemKind {
-  Function(ast::function::Function<ast::util::Type<String>>),
-  Struct(ast::r#struct::Struct<ast::util::Type<String>>),
-  Enum(ast::r#enum::Enum<ast::util::Type<String>>),
-  Trait(ast::r#trait::Trait<ast::util::Type<String>>),
-  PrefixOperator(ast::operator::Prefix<ast::util::Type<String>>),
-  InfixOperator(ast::operator::Infix<ast::util::Type<String>>),
-  TypeParameter(ast::util::TypeParameter),
-  Variable(ast::util::Type<String>),
+  Function(ast::function::Function<ast::util::Type<Vec<String>>>),
+  Struct(ast::r#struct::Struct<ast::util::Type<Vec<String>>>),
+  Enum(ast::r#enum::Enum<ast::util::Type<Vec<String>>>),
+  Trait(ast::r#trait::Trait<ast::util::Type<Vec<String>>>),
+  PrefixOperator(ast::operator::Prefix<ast::util::Type<Vec<String>>>),
+  InfixOperator(ast::operator::Infix<ast::util::Type<Vec<String>>>),
+  Variable(ast::util::Type<Vec<String>>),
 }

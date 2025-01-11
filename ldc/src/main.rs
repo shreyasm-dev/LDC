@@ -58,8 +58,28 @@ fn main() {
   "#
     .trim(); */
   let source = r#"
-fn hello(a: a::b, b: c, c: c, x: bool): a::b | (a::b, c) {
+pub fn hello(a: a::b, b: c, c: c, x: bool): a::b | (a::b, c) {
   if x a else hello(a, c, b, x)
+};
+
+pub struct Util {
+  pub fn x(a: i32, b: i32): i32 {
+    choose(a, b, true)
+  };
+
+  pub fn y(a: i32): i32 x(a, a);
+
+  pub static fn negate(x: bool): bool {
+    if x false else true
+  };
+
+  pub static fn choose(a: i32, b: i32, x: bool): i32 {
+    if negate(x) a else b
+  };
+
+  pub struct Helpers {
+    pub fn y() x(1, 2);
+  };
 };
 "#
   .trim();
@@ -67,16 +87,19 @@ fn hello(a: a::b, b: c, c: c, x: bool): a::b | (a::b, c) {
   let mut lexer = Lexer::new(source);
   match lexer.lex(false) {
     Ok(tokens) => {
-      for token in tokens.clone() {
-        println!("{:?}", token);
+      for _ in tokens.clone() {
+        // println!("{:?}", token);
       }
 
       let mut parser = Parser::new(tokens.iter().peekable());
-      let ast = parser.parse();
+      let ast: Result<
+        parser::ast::module::Module<parser::ast::util::Type<Vec<String>>>,
+        error::Error<error::ParserError>,
+      > = parser.parse();
 
       match ast {
         Ok(ast) => {
-          println!("{:#?}", ast);
+          // println!("{:#?}", ast);
 
           let mut typechecker = Typechecker::new();
           let result = typechecker.typecheck(ast.clone());
@@ -102,7 +125,9 @@ fn hello(a: a::b, b: c, c: c, x: bool): a::b | (a::b, c) {
                   .collect::<Vec<String>>()
                   .join(", ")
               ),
-              error::TypecheckerError::Todo => println!("TODO"),
+              error::TypecheckerError::UnresolvedIdentifier(name) => {
+                println!("Unresolved identifier {}", name)
+              }
             },
           }
         }

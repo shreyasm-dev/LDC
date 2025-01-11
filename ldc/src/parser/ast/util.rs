@@ -41,7 +41,7 @@ where
   F32,
   F64,
   Char,
-  Named(Vec<Ref>, Vec<Type<Ref>>),
+  Named(Ref, Vec<Type<Ref>>),
   Function(Vec<Type<Ref>>, Box<Type<Ref>>),
   Tuple(Vec<Type<Ref>>),
   Array(Box<Type<Ref>>),
@@ -126,7 +126,7 @@ impl<Ref: Clone + PartialEq + Ord> PartialEq for Type<Ref> {
   }
 }
 
-impl<Ref: Clone + PartialEq + Ord + Display> Display for Type<Ref> {
+impl Display for Type<Vec<String>> {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       Type::Bool => write!(f, "bool"),
@@ -329,12 +329,6 @@ impl<Ref: Clone + PartialEq + Ord> Into<Type<Ref>> for NumberLiteral<Type<Ref>> 
       F64
     )
   }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypeParameter {
-  pub name: String,
-  pub traits: Vec<Path>,
 }
 
 pub type Path = Vec<String>;

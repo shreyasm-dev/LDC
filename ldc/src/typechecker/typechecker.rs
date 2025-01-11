@@ -3,8 +3,8 @@ use crate::{error::TypecheckerError, parser::ast, union};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use uuid::Uuid;
 
-type Type = ast::util::Type<String>;
-type Tagged = ast::util::Type<Uuid>;
+type Type = ast::util::Type<Vec<String>>;
+// type Tagged = ast::util::Type<Uuid>;
 
 #[derive(Debug, Clone)]
 pub struct Typechecker {
@@ -22,40 +22,59 @@ impl Typechecker {
     &mut self,
     module: ast::module::Module<Type>,
   ) -> Result<(), TypecheckerError<Type>> {
-    self.typecheck_module(None, module).map(|_| ())
+    self
+      .typecheck_module(Rc::new(RefCell::new(Scope::default())), module, false)
+      .map(|_| ())
   }
 
   pub fn typecheck_module(
     &mut self,
-    parent: Option<Rc<RefCell<Scope>>>,
+    scope: Rc<RefCell<Scope>>,
     module: ast::module::Module<Type>,
+    static_: bool,
   ) -> Result<(), TypecheckerError<Type>> {
-    let mut scope = Scope::new(parent);
-
     for item in &module.items {
+      if static_ ^ item.modifiers.static_ {
+        continue;
+      }
+
       match &item.kind {
         ast::module::ItemKind::Function(f) => {
-          scope.insert(
+          scope.borrow_mut().insert(
             f.header.name.clone(),
             Item::new(ItemKind::Function(f.clone())),
           );
         }
         ast::module::ItemKind::Struct(s) => {
           let item = Item::new(ItemKind::Struct(s.clone()));
-          scope.insert(s.header.name.clone(), item.clone());
+          scope
+            .borrow_mut()
+            .insert(s.header.name.clone(), item.clone());
+          self.types.insert(item.0, item);
+        }
+        ast::module::ItemKind::Enum(e) => {
+          let item = Item::new(ItemKind::Enum(e.clone()));
+          scope
+            .borrow_mut()
+            .insert(e.header.name.clone(), item.clone());
           self.types.insert(item.0, item);
         }
         _ => todo!(),
       }
     }
 
-    let scope_ref = Rc::new(RefCell::new(scope));
     for item in &module.items {
+      if static_ ^ item.modifiers.static_ {
+        continue;
+      }
+
       match &item.kind {
         ast::module::ItemKind::Function(f) => {
-          self.typecheck_function(scope_ref.clone(), f.clone())?;
+          self.typecheck_function(scope.clone(), f.clone())?;
         }
-        ast::module::ItemKind::Struct(s) => {}
+        ast::module::ItemKind::Struct(s) => {
+          self.typecheck_struct(scope.clone(), s.clone())?;
+        }
         _ => todo!(),
       }
     }
@@ -77,7 +96,8 @@ impl Typechecker {
       );
     }
 
-    let body = self.typecheck_expression(Rc::new(RefCell::new(scope)), function.body.clone())?;
+    let body =
+      self.typecheck_expression(Rc::new(RefCell::new(scope.clone())), function.body.clone())?;
 
     if let Some(ty) = &function.header.ty {
       if !body.satisfies(ty) {
@@ -87,6 +107,20 @@ impl Typechecker {
         })?
       }
     }
+
+    Ok(())
+  }
+
+  pub fn typecheck_struct(
+    &mut self,
+    parent: Rc<RefCell<Scope>>,
+    r#struct: ast::r#struct::Struct<Type>,
+  ) -> Result<(), TypecheckerError<Type>> {
+    let static_ = Rc::new(RefCell::new(Scope::new(Some(parent))));
+    self.typecheck_module(static_.clone(), r#struct.module.clone(), true)?;
+
+    let instance = Rc::new(RefCell::new(Scope::new(Some(static_))));
+    self.typecheck_module(instance, r#struct.module, false)?;
 
     Ok(())
   }
@@ -147,7 +181,7 @@ impl Typechecker {
 
             Ok(*r#type)
           }
-          _ => Err(TypecheckerError::Todo),
+          _ => todo!(),
         }
       }
       // TODO: functions, etc.
@@ -157,7 +191,7 @@ impl Typechecker {
           f.header.parameters.iter().map(|p| p.ty.clone()).collect(),
           Box::new(f.header.ty.clone().unwrap_or(Type::Tuple(vec![]))),
         )),
-        _ => Err(TypecheckerError::Todo),
+        _ => Err(TypecheckerError::UnresolvedIdentifier(name))?,
       },
       ast::util::Expression::If {
         condition,
@@ -197,7 +231,7 @@ impl Typechecker {
         ast::util::Literal::Array(vec) => {
           // TODO: inference
           if vec.is_empty() {
-            Err(TypecheckerError::Todo)?
+            todo!()
           }
 
           todo!()

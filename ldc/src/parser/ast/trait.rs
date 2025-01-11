@@ -9,7 +9,7 @@ pub struct Trait<T> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Header {
   pub name: String,
-  pub type_parameters: Vec<util::TypeParameter>,
+  // pub type_parameters: Vec<util::TypeParameter>,
   pub traits: Vec<util::Path>,
 }
 
@@ -26,7 +26,7 @@ pub enum Item<T> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Function<T> {
   pub name: String,
-  pub type_parameters: Vec<util::TypeParameter>,
+  // pub type_parameters: Vec<util::TypeParameter>,
   pub parameters: Vec<T>,
   pub ty: T,
 }
@@ -34,20 +34,20 @@ pub struct Function<T> {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Enum {
   pub name: String,
-  pub type_parameters: Vec<util::TypeParameter>,
+  // pub type_parameters: Vec<util::TypeParameter>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Struct {
   pub name: String,
-  pub type_parameters: Vec<util::TypeParameter>,
+  // pub type_parameters: Vec<util::TypeParameter>,
   pub traits: Vec<util::Path>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Trait_ {
   pub name: String,
-  pub type_parameters: Vec<util::TypeParameter>,
+  // pub type_parameters: Vec<util::TypeParameter>,
   pub traits: Vec<util::Path>,
 }
 
@@ -55,13 +55,13 @@ pub struct Trait_ {
 pub enum Operator<T> {
   Prefix {
     operator: String,
-    type_parameters: Vec<util::TypeParameter>,
+    // type_parameters: Vec<util::TypeParameter>,
     operand: T,
     result: T,
   },
   Infix {
     operator: String,
-    type_parameters: Vec<util::TypeParameter>,
+    // type_parameters: Vec<util::TypeParameter>,
     operands: (T, T),
     result: T,
   },

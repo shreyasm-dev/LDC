@@ -37,7 +37,7 @@ pub enum ParserError {
 pub enum TypecheckerError<T> {
   InvalidType { expected: T, found: T },
   InvalidArguments { expected: Vec<T>, found: Vec<T> },
-  Todo,
+  UnresolvedIdentifier(String),
 }
 
 impl Reportable for LexerError {
